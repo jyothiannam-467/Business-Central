@@ -1,0 +1,97 @@
+codeunit 80000 Posted
+{
+    var
+        LineNo: Integer;
+        DispatchLineNo: Integer;
+
+        DispatchLedgerEntry: Record "Dispatch Ledger Entry";
+        DispatchLedgerEntry1: Record "Dispatch Ledger Entry";
+        postedDispatchHd: Record "Posted Dispatch header";
+        PostedDispatchLine: Record "Posted Dispatch Line";
+        EntryNoGvar: Integer;
+
+    procedure Posted(Var DispatchHd: Record "Dispatch Header")
+    var
+        DispatchLineRec: Record "Dispatch Line";
+        DispatchLineLRec1: record "Dispatch Line";
+
+    begin
+        DispatchLineRec.Reset();
+        DispatchLineRec.SetRange("Document No", DispatchHd."Document No");
+        if DispatchLineRec.FindFirst() then
+            repeat
+                DispatchLineRec."Qty to Post" := (DispatchLineRec.Quantity - DispatchLineRec."Qty to Post")
+            Until DispatchLineRec.Next() = 0;
+
+        postedDispatchHd.Init();
+        postedDispatchHd."Document No" := '';
+        postedDispatchHd.validate("Document Type", DispatchHd."Document Type");
+        postedDispatchHd.Insert(True);
+        postedDispatchHd.validate("Dispatch No", DispatchHd."Document No");
+        postedDispatchHd.Description := DispatchHd.Description;
+        postedDispatchHd."Posted By " := DispatchHd.CreatedBy;
+        postedDispatchHd."Posting Date" := DispatchHd.PostingDate;
+        postedDispatchHd.Validate(Status, DispatchHd.Status);
+        postedDispatchHd.Modify();
+
+        LineNo := 10000;
+        DispatchLineRec.Reset();
+        DispatchLineRec.SetRange("Document No", DispatchHd."Document No");
+        DispatchLineRec.SetRange("Document Type", DispatchHd."Document Type");
+        If DispatchLineRec.FindSet() then
+            repeat
+                PostedDispatchLine.init;
+                PostedDispatchLine.Validate("Document No", postedDispatchHd."Document No");
+                PostedDispatchLine.Validate("Document Type", postedDispatchHd."Document Type");
+                PostedDispatchLine."Line No" := LineNo;
+                PostedDispatchLine.Insert(True);
+                LineNo += 10000;
+                if DispatchLineRec.Type = DispatchLineRec.Type::Item then begin
+                    PostedDispatchLine.Validate(Type, DispatchLineRec.Type::Item);
+                    PostedDispatchLine.Validate(No, DispatchLineRec.No);
+                    PostedDispatchLine.Validate(Description, DispatchLineRec.Description);
+                end
+                else
+                    if DispatchLineRec.Type = DispatchLineRec.Type::GLAccount then begin
+                        PostedDispatchLine.Validate(Type, DispatchLineRec.Type::GLAccount);
+                        PostedDispatchLine.Validate(No, DispatchLineRec.No);
+                        PostedDispatchLine.Validate(Description, DispatchLineRec.Description);
+                    end;
+                PostedDispatchLine.Validate(Quantity, DispatchLineRec."Qty Posted");
+                PostedDispatchLine.Validate("Unit Price", DispatchLineRec.UnitPrice);
+                PostedDispatchLine.Validate(Amount, DispatchLineRec.Amount);
+                PostedDispatchLine.Modify(true);
+            until DispatchLineRec.Next() = 0;
+
+        DispatchLineNo := 10000;
+        PostedDispatchLine.Reset();
+        PostedDispatchLine.SetRange("Document No", postedDispatchHd."Document No");
+        PostedDispatchLine.SetRange("Document Type", postedDispatchHd."Document Type");
+        if PostedDispatchLine.FindSet() then
+            repeat
+                DispatchLedgerEntry.Init();
+                DispatchLedgerEntry.Validate("Document No", postedDispatchHd."Document No");
+                DispatchLedgerEntry.Validate("Document Type", postedDispatchHd."Document Type");
+                DispatchLedgerEntry.Validate("Dispatch Line No", PostedDispatchLine."Line No");
+                DispatchLedgerEntry.validate("Dispatch No", DispatchHd."Document No");
+                DispatchLedgerEntry."Line No" := DispatchLineNo;
+                DispatchLineNo := DispatchLedgerEntry."Line No";
+                DispatchLineNo += 10000;
+                if PostedDispatchLine.Type = PostedDispatchLine.Type::Item then begin
+                    DispatchLedgerEntry.Validate(Type, PostedDispatchLine.Type::Item);
+                    DispatchLedgerEntry.Validate(No, PostedDispatchLine.No);
+                    DispatchLedgerEntry.Validate(Description, PostedDispatchLine.Description);
+                end
+                else
+                    if PostedDispatchLine.Type = PostedDispatchLine.Type::"GL Account" then begin
+                        DispatchLedgerEntry.Validate(Type, PostedDispatchLine.Type::"GL Account");
+                        DispatchLedgerEntry.Validate(No, PostedDispatchLine.no);
+                        DispatchLedgerEntry.Validate(Description, PostedDispatchLine.Description);
+                    end;
+                DispatchLedgerEntry.Quantity := PostedDispatchLine.Quantity;
+                DispatchLedgerEntry."Unit Price" := PostedDispatchLine."Unit Price";
+                DispatchLedgerEntry.Amount := PostedDispatchLine.Amount;
+                DispatchLedgerEntry1.Insert(True);
+            until PostedDispatchLine.Next() = 0;
+    end;
+}
