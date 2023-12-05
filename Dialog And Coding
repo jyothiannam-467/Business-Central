@@ -1,0 +1,95 @@
+pageextension 67854 "Sales Order_Ext" extends "Sales Order"
+{
+    layout
+    {
+        modify("No.")
+        {
+            Editable = false;
+        }
+    }
+    Actions
+    {
+        addafter("Create &Warehouse Shipment")
+        {
+            action(MyListPage)
+            {
+                ApplicationArea = All;
+                Caption = 'ListPage';
+                Promoted = true;
+                PromotedCategory = Process;
+                PromotedIsBig = true;
+                Image = List;
+
+                trigger OnAction()
+                var
+                    MyListPage: page MyListPage;
+
+                begin
+                    MyListPage.run;
+
+                end;
+            }
+            action(New)
+            {
+                ApplicationArea = All;
+                Caption = 'New';
+                Promoted = true;
+                PromotedCategory = Process;
+                PromotedIsBig = true;
+                Image = New;
+
+                trigger OnAction()
+                var
+                    MyListPage: page MyListPage;
+                    MyTable: Record MyTable;
+                    SalesLine: Record "Sales Line";
+                    Extension: Record "Sales & Receivables Setup";
+                    SalesHeader: Record "Sales Header";
+                    Confirm: Boolean;
+                    Ok: Integer;
+                    NewDocumentNo: Code[20];
+                    NewDocumentLineNo: Integer;
+                    SalesLine3: Record "Sales Line";
+                    LineNo: Integer;
+                begin
+                    Ok := Dialog.StrMenu('Ok,Cancel', 1, 'Do you want to add a new sales order line?');
+                    If Ok = 1 then begin
+                        SalesLine.Init();
+                        SalesLine3.Reset();
+                        SalesLine3.SetRange("Document Type", Rec."Document Type");
+                        SalesLine3.SetRange("Document No.", Rec."No.");
+                        If SalesLine3.FindLast() then
+                            LineNo := SalesLine3."Line No." + 10000
+                        else
+                            LineNo := 10000;
+                        SalesLine."Document Type" := Rec."Document Type";
+                        SalesLine."Document No." := Rec."No.";
+                        SalesLine."Line No." := LineNo;
+                        SalesLine.Insert(True);
+                        SalesLine.Validate(Type, SalesLine.Type::"G/L Account");
+                        Extension.Get();
+                        SalesLine."No." := Extension.GLAccountNo;
+                        SalesLine.Quantity := 1;
+                        // //Mytable.Get();
+                        // //SalesLine."Unit Price" := MyTable.Amount;
+                        // MyTable.SetRange(Amount, 1234);
+                        // If MyTable.FindSet() then begin
+                        //     repeat
+                        //         SalesLine."Unit Price" := MyTable.Amount;
+                        //     Until MyTable.Next() = 0;
+                        // end;
+                        //SalesLine."Unit Price" := 1000;
+                        // MyTable.Get();
+                        // SalesLine.Validate("Unit Price", MyTable.Amount);
+                        // SalesLine.Modify(true);
+                    End;
+
+                end;
+
+
+            }
+
+        }
+    }
+
+}
