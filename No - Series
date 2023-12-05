@@ -1,0 +1,75 @@
+table 50505 "Consultant B2B"
+{
+    Caption = 'Consultant';
+    DataClassification = CustomerContent;
+    LookupPageId = "Consultants List B2B";
+    DrillDownPageId = "Consultants List B2B";
+
+    fields
+    {
+        field(1; "Consultant Code"; Code[20])
+        {
+            Caption = 'Sr. No';
+            DataClassification = CustomerContent;
+            trigger OnValidate()
+            begin
+                if "Consultant Code" <> xRec."Consultant Code" then begin
+                    HRSetup.Get();
+                    NoSeriesMgmt.TestManual(HRSetup."Consultant Nos");
+                    "No. Series" := '';
+                end;
+            end;}
+}
+ trigger OnInsert()
+    begin
+        if "Consultant Code" = '' then begin
+            HRSetup.Get();
+            HRSetup.TestField("Consultant Nos");
+            NoSeriesMgmt.InitSeries(HRSetup."Consultant Nos", xRec."No. Series", 0D, "Consultant Code", "No. Series");
+        end;
+    end;
+
+ procedure AssistEdit(var ConsultantB2B: Record "Consultant B2B"): Boolean;
+    var
+        ConsultantB2BRec: Record "Consultant B2B";
+    begin
+        ConsultantB2BRec := Rec;
+        Hrsetup.GET();
+        Hrsetup.TESTFIELD("Consultant Nos");
+        IF NoSeriesMgmt.SelectSeries(Hrsetup."Consultant Nos", ConsultantB2B."Consultant Code", ConsultantB2B."Consultant Code") THEN BEGIN
+            NoSeriesMgmt.SetSeries(ConsultantB2B."Consultant Code");
+            Rec := ConsultantB2BRec;
+            EXIT(TRUE);
+        end;
+    end;
+
+
+page 50507 "Consultant Card B2B"
+{
+    ApplicationArea = All;
+    Caption = 'Consultant Card';
+    PageType = Card;
+    SourceTable = "Consultant B2B";
+    DataCaptionFields = "Consultant Code";
+    //Editable = false;
+    layout
+    {
+        area(content)
+        {
+            group(General)
+            {
+                Caption = 'General';
+
+                field("Consultant Code"; Rec."Consultant Code")
+                {
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies the value of the Sr.No field.';
+                    trigger OnAssistEdit()
+                    begin
+                        if Rec.AssistEdit(xRec) then
+                            CurrPage.Update();
+                    end;
+                } 
+           } 
+       } 
+} 
