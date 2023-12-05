@@ -1,0 +1,78 @@
+codeunit 50100 EmailTo
+{
+    procedure SendEmail(ItemLedgerEntries: Record "Item Ledger Entry");
+    var
+
+        CCRecipient: List of [Text];
+        ToRecipient: List of [Text];
+        BccRecipient: List of [Text];
+        AttachmentTempBlob: Codeunit "Temp Blob";
+        RecordrefVar: RecordRef;
+        XMLPara: Text;
+        body: Text;
+        Body1: Label 'Hi Team,';
+        Text0002: Label 'Item Ledger Entries of Entry type "%1" & Document Type "%2"';
+        CCRecipient2: Text;
+        ToRecipient2: Text;
+        Seperator: text;
+        InventorySetup: Record "Inventory Setup";
+        Vendor: record vendor;
+        Item: Record Item;
+        Text004: Label 'Message Sent Successfully';
+    begin
+        InventorySetup.Get();
+        if InventorySetup.EmailTo <> '' then begin
+            ToRecipient2 := InventorySetup.EmailTo;
+            ToRecipient := ToRecipient2.Split(Seperator.Split());
+        end;
+
+        ItemLedgerEntries.Reset();
+        ItemLedgerEntries.SetCurrentKey("Entry Type", "Document Type");
+        ItemLedgerEntries.SetRange("Entry Type", ItemLedgerEntries."Entry Type"::Sale);
+        ItemLedgerEntries.SetRange("Document Type", ItemLedgerEntries."Document Type"::"Sales Shipment");
+        if ItemLedgerEntries.FindSet() then begin
+            MailTable();
+            repeat
+                EmailMessage.AppendToBody('<tr>');
+                EmailMessage.AppendToBody('<td>' + ItemLedgerEntries."Item No." + '</td>');
+                EmailMessage.AppendToBody('<td>' + ItemLedgerEntries."Lot No." + '</td>');
+                EmailMessage.AppendToBody('<td>' + Format(ItemLedgerEntries."Expiration Date") + '</td>');
+                EmailMessage.AppendToBody('</tr>');
+                EmailMessage.AppendToBody('</br>');
+            until ItemLedgerEntries.Next = 0;
+
+            EmailMessage.AppendToBody('</table>');
+            EmailMessage.AppendToBody('<hr>');
+            Email.Send(EmailMessage, Enum::"Email Scenario"::Default);
+            Message(Text004);
+        end
+    end;
+
+    procedure MailTable()
+    var
+        InnventorySetup: record "Inventory Setup";
+    begin
+        InnventorySetup.Get();
+        Clear(EmailMessage);
+        EmailMessage.Create(InnventorySetup.EmailTo, 'Sale', 'Hi Team');
+        EmailMessage.SetBodyHTMLFormatted(true);
+        EmailMessage.AppendToBody('<br>');
+        EmailMessage.AppendToBody('Find the below Item Ledger Entries <b>');
+        EmailMessage.AppendToBody('<br>');
+        EmailMessage.AppendToBody('<br>');
+        EmailMessage.AppendToBody('<BR>');
+        EmailMessage.AppendToBody('<table border="1">');
+        EmailMessage.AppendToBody('<tr>');
+        EmailMessage.AppendToBody('<th>Item no.</th>');
+        EmailMessage.AppendToBody('<th>Lot No</th>');
+        EmailMessage.AppendToBody('<th>Expiration Date</th>');
+        EmailMessage.AppendToBody('</tr>');
+    end;
+
+    var
+        Email: Codeunit Email;
+        EmailMessage: Codeunit "Email Message";
+        Text001: Label 'Item Ledger Entries';
+        Subject: Text;
+        ItemLedgerentriesGRec: record "Item Ledger Entry";
+}
