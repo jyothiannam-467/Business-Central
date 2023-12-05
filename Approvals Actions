@@ -1,0 +1,134 @@
+ group(Approvals)
+            {
+                Caption = 'Approvals';
+                ToolTip = 'The User Can Send The documents For Approvals';
+                action(Approve)
+                {
+                    ApplicationArea = All;
+                    Image = Action;
+                    Promoted = true;
+                    PromotedIsBig = true;
+                    PromotedCategory = Process;
+                    PromotedOnly = true;
+                    trigger OnAction()
+                    var
+                        approvalmngmt: Codeunit "Approvals Mgmt.";
+                    begin
+                        approvalmngmt.ApproveRecordApprovalRequest(rec.RecordId());
+                    end;
+                }
+                action("Send Approval Request")
+                {
+                    ApplicationArea = All;
+                    Image = SendApprovalRequest;
+                    // Visible = Not OpenApprEntrEsists and CanrequestApprovForFlow;
+                    Promoted = true;
+                    PromotedIsBig = true;
+                    PromotedCategory = Process;
+                    PromotedOnly = true;
+                    trigger OnAction()
+                    var
+                        ApprovalsCodeunit: Codeunit "Approvals Codeunit";
+
+                    begin
+                        DueDateL();
+                        if ApprovalsCodeunit.CheckInspectionReceiptApprovalsWorkflowEnabled(Rec) then
+                            ApprovalsCodeunit.OnSendInspectionReceiptForApproval(Rec);
+                    end;
+                }
+                action("Cancel Approval Request")
+                {
+                    ApplicationArea = All;
+                    Image = CancelApprovalRequest;
+                    //   Visible = CanCancelapprovalforrecord or CanCancelapprovalforflow;
+                    Promoted = true;
+                    PromotedIsBig = true;
+                    PromotedCategory = Process;
+                    PromotedOnly = true;
+                    trigger OnAction()
+                    var
+                        ApprovalsCodeunit: Codeunit "Approvals Codeunit";
+
+                    begin
+                        ApprovalsCodeunit.OnCancelInspectionReceiptForApproval(Rec);
+                        if rec."Approval Status" = rec."Approval Status"::"Pending Approval" then
+                            rec."Approval Status" := rec."Approval Status"::Open;
+                        Rec.Modify();
+                    end;
+                }
+                action("Approval Entries")
+                {
+                    ApplicationArea = All;
+                    Image = Entries;
+                    Promoted = true;
+                    PromotedIsBig = true;
+                    PromotedCategory = Process;
+                    PromotedOnly = true;
+                    trigger OnAction()
+                    var
+                        ApprovalEntries: Page "Approval Entries";
+                        ApprovalEntry: Record "Approval Entry";
+                    begin
+                        ApprovalEntry.Reset();
+                        ApprovalEntry.SetRange("Table ID", DATABASE::"Inspection Receipt Header B2B");
+                        ApprovalEntry.SetRange("Document No.", Rec."Spec ID");
+                        ApprovalEntries.SetTableView(ApprovalEntry);
+                        ApprovalEntries.RUN;
+                    end;
+                }
+                action("Re&lease")
+                {
+                    ApplicationArea = all;
+                    Caption = 'Re&lease';
+                    ShortCutKey = 'Ctrl+F11';
+                    Image = ReleaseDoc;
+                    Promoted = true;
+                    //PromotedIsBig = true;
+                    PromotedCategory = Process;
+                    PromotedOnly = true;
+                    trigger OnAction()
+                    var
+                        WorkflowManagement: Codeunit "Workflow Management";
+                        ApprovalsCodeunit: Codeunit "Approvals Codeunit";
+                    begin
+                        DueDateL();
+                        IF WorkflowManagement.CanExecuteWorkflow(Rec, ApprovalsCodeunit.RunworkflowOnSendInspectionReceiptforApprovalCode()) then
+                            error('Workflow is enabled. You can not release manually.');
+
+                        IF Rec."Approval Status" <> Rec."Approval Status"::Released then BEGIN
+                            Rec."Approval Status" := Rec."Approval Status"::Released;
+                            Rec.Modify();
+                            Message('Document has been Released.');
+                        end;
+                    end;
+                }
+
+
+
+                action("Re&open")
+                {
+                    ApplicationArea = all;
+                    Caption = 'Re&open';
+                    Image = ReOpen;
+                    Promoted = true;
+                    //PromotedIsBig = true;
+                    PromotedCategory = Process;
+                    PromotedOnly = true;
+                    trigger OnAction();
+                    var
+                        RecordRest: Record "Restricted Record";
+                    begin
+                        RecordRest.Reset();
+                        RecordRest.SetRange(ID, Database::"PDC Registration");
+                        RecordRest.SetRange("Record ID", Rec.RecordId());
+                        IF RecordRest.FindFirst() THEN
+                            error('This record is under in workflow process. Please cancel approval request if not required.');
+                        IF Rec."Approval Status" <> Rec."Approval Status"::Open then BEGIN
+                            Rec."Approval Status" := Rec."Approval Status"::Open;
+                            //Rec.Status:=Rec.st
+                            Rec.Modify();
+                            Message('Document has been Reopened.');
+                        end;
+                    end;
+                }
+            }
