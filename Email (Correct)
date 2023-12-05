@@ -1,0 +1,54 @@
+procedure SendPoRelease(PurchasHdrPr: Record "Purchase Header");
+    var
+        CCRecipient: List of [Text];
+        ToRecipient: List of [Text];
+        BccRecipient: List of [Text];
+        AttcahmentInstream: InStream;
+        AttchmentOutStream: OutStream;
+        FileMgt: Codeunit "File Management";
+        AttachmentTempBlob: Codeunit "Temp Blob";
+        RecordrefVar: RecordRef;
+        PurchHdr: Record "Purchase Header";
+        POReport: Report "Standard Purchase - Order";
+        POReport1: Report "Standard Purchase - Order";
+        XMLPara: Text;
+        body: Text;
+        Body1: Label 'Hi Team,';
+        Text0002: Label 'We have confirmed the Purchase Order %1 as per your request and now we are processing it.';
+        CCRecipient2: Text;
+        ToRecipient2: Text;
+        Seperator: text;
+    begin
+        purchasPayble.Get();
+        vendor.Reset();
+        vendor.SetRange("No.", PurchasHdrPr."Buy-from Vendor No.");
+        if vendor.FindFirst() then;
+
+        Seperator := ', ;';
+        if purchasPayble."PO CC" <> '' then begin
+            CCRecipient2 := vendor."E-Mail";
+            CCRecipient := CCRecipient2.Split(Seperator.Split());
+        end;
+        if (purchasPayble."PO To" + vendor."E-Mail" <> '') then begin
+            ToRecipient2 := purchasPayble."PO To" + ';' + vendor."E-Mail";
+            ToRecipient := ToRecipient2.Split(Seperator.Split());
+        end;
+
+        Subject := Text001;
+        body += StrSubstNo(Text0002, PurchasHdrPr."No.");
+        EmailMessage.Create(ToRecipient, Subject, Body1, true, CCRecipient, BccRecipient);
+        EmailMessage.AppendToBody('<BR></BR>');
+        EmailMessage.AppendToBody('<BR></BR>');
+        EmailMessage.AppendToBody(body);
+        AttachmentTempBlob.CreateOutStream(AttchmentOutStream, TextEncoding::UTF8);
+        PurchHdr.Reset();
+        PurchHdr.SetRange("No.", PurchasHdrPr."No.");
+        PurchHdr.SetRange("Document Type", PurchHdr."Document Type"::Order);
+        //if PurchHdr.FindFirst() then;
+        RecordrefVar.GetTable(PurchHdr);
+        POReport1.SaveAs('', ReportFormat::Pdf, AttchmentOutStream, RecordrefVar);
+        AttachmentTempBlob.CreateInStream(AttcahmentInstream);
+        EmailMessage.AddAttachment('Purchase Order Report.pdf', 'PDF', AttcahmentInstream);
+        Email.Send(EmailMessage, Enum::"Email Scenario"::Default);
+        Message('Email Sent Sucessfully');
+    end;
