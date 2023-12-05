@@ -1,0 +1,60 @@
+pageextension 89001 "Consumption Journal_Ext" extends "Consumption Journal"
+{
+    layout
+    {
+        modify("Posting Date") { StyleExpr = StyleGVar; }
+        modify("Applies-from Entry") { StyleExpr = StyleGVar; }
+        modify("Applies-to Entry") { StyleExpr = StyleGVar; }
+        modify("Bin Code") { StyleExpr = StyleGVar; }
+        modify(CurrentJnlBatchName) { StyleExpr = StyleGVar; }
+        modify(Description) { StyleExpr = StyleGVar; }
+        modify("Shortcut Dimension 1 Code") { StyleExpr = StyleGVar; }
+        modify("Item No.") { StyleExpr = StyleGVar; }
+        modify("Document No.") { StyleExpr = StyleGVar; }
+        modify(Quantity) { StyleExpr = StyleGVar; }
+        modify("Order No.") { StyleExpr = StyleGVar; }
+        modify("Order Line No.") { StyleExpr = StyleGVar; }
+        modify("Prod. Order Comp. Line No.") { StyleExpr = StyleGVar; }
+        modify("Unit of Measure Code") { StyleExpr = StyleGVar; }
+        modify("Unit Amount") { StyleExpr = StyleGVar; }
+        modify("Shortcut Dimension 2 Code") { StyleExpr = StyleGVar; }
+        modify(ShortcutDimCode3) { StyleExpr = StyleGVar; }
+        modify(ShortcutDimCode4) { StyleExpr = StyleGVar; }
+        modify(ShortcutDimCode5) { StyleExpr = StyleGVar; }
+        modify(ShortcutDimCode6) { StyleExpr = StyleGVar; }
+        modify(ShortcutDimCode7) { StyleExpr = StyleGVar; }
+        modify(ShortcutDimCode8) { StyleExpr = StyleGVar; }
+        addafter(Quantity)
+        {
+            field(Inventory; Rec.Inventory)
+            {
+                Caption = 'Inventory';
+                ApplicationArea = All;
+                StyleExpr = StyleGVar;
+            }
+        }
+        addafter(Inventory)
+        {
+            field("Allow to Post"; Rec."Allow to Post")
+            {
+                Caption = 'Allow to Post';
+                ApplicationArea = All;
+                StyleExpr = StyleGVar;
+            }
+        }
+    }
+    trigger OnAfterGetCurrRecord();
+    begin
+        StyleGVar := Style;
+    end;
+
+    var
+        StyleGVar: Text;
+
+    Local procedure Style(): text
+    begin
+        Rec.CalcFields(Rec.Inventory);
+        if Rec.Inventory < Rec.Quantity then
+            exit('Strong');
+    end;
+}
