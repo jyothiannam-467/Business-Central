@@ -57,3 +57,36 @@ codeunit 52000 CopyDoc
     end;
 
 }
+actions
+    {
+        area(Navigation)
+        {
+            group(Manage)
+            {
+
+                Caption = 'Manage';
+                action(CopyDocument)
+                {
+                    ApplicationArea = All;
+                    Caption = 'Copy Document';
+                    Image = Copy;
+                    Promoted = True;
+                    PromotedIsBig = true;
+                    ShortcutKey = 'F7';
+                    ToolTip = 'Copy Document';
+
+                    trigger OnAction()
+                    var
+                        CopyDoc: Codeunit CopyDoc;
+                    begin
+                        CopyDoc.CopyDoc(Rec);
+                        Message('Successfully Copied Document');
+                    end;
+
+
+
+                }
+
+            }
+        }
+    }
