@@ -1,0 +1,9 @@
+ MachineCenter.Reset();
+                    MachineCentreList.LookupMode(true);
+                    if MachineCentreList.RunModal() = Action::LookupOK then begin
+                        MachineCentreList.SetSelectionFilter(MachineCenter);
+                        if MachineCenter.FindSet() then begin
+                            RecRef.GetTable(MachineCenter);
+                            Rec."Machine No." := SelectonMgmt.GetSelectionFilter(RecRef, MachineCenter.FieldNo("No."));
+                        end;
+                    end;
