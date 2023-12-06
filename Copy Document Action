@@ -1,0 +1,59 @@
+codeunit 52000 CopyDoc
+{
+    trigger OnRun()
+    begin
+
+    end;
+
+    var
+        myInt: Integer;
+
+    Procedure CopyDoc(VAR ToIndentHeader: Record "Indent Header")
+    var
+        FromIndentHeader: Record "Indent Header";
+        ToIndentLine: record IndentLine;
+        FromIndentLine: record IndentLine;
+        LineNo: Integer;
+
+
+    begin
+        FromIndentHeader.SetRange(DocumentType, Fromindentheader.DocumentType::Order);
+        IF PAGE.RUNMODAL(52000, FromIndentHeader) = ACTION::LookupOK THEN BEGIN
+            ToIndentHeader.Init();
+            ToIndentHeader.DocumentType := FromIndentHeader.DocumentType::Order;
+            ToIndentHeader.validate("CustomerNo.", FromIndentHeader."CustomerNo.");
+            ToIndentHeader."LocationCode." := FromIndentHeader."LocationCode.";
+            ToIndentHeader.postingDate := FromIndentHeader.postingDate;
+            ToIndentHeader.Modify();
+
+
+            FromIndentLIne.RESET;
+            FromIndentLine.SetRange(DocumentType, FromIndentHeader.DocumentType);
+            FromIndentLIne.SETRANGE("DocumentNo.", FromIndentHeader."No.");
+            IF FromIndentLIne.FINDSET THEN
+                REPEAT
+                    ToIndentLine.Init();
+                    ToIndentHeader.DocumentType := FromIndentHeader.DocumentType::Order;
+                    ToIndentLine."DocumentNo." := FromIndentHeader."No.";
+                    if ToIndentLine.FindLast() then
+                        LineNo := ToIndentLine.LineNo + 10000
+                    Else
+                        LineNo := 10000;
+                    ToIndentLine."Location Code" := FromIndentLine."Location Code";
+                    if FromIndentLine.Type = FromIndentLine.Type::Item then begin
+                        ToIndentLine.Type := ToIndentLine.Type::Item;
+                        ToIndentLine."No." := FromIndentLine."No.";
+                        ToIndentLine.Description := FromIndentLine.Description;
+                    end;
+                    if FromIndentLine.type = FromIndentLine.Type::"GL Account" Then Begin
+                        ToIndentLine.Type := FromIndentLine.Type::"GL Account";
+                        ToIndentLine."No." := FromIndentLine."No.";
+                        ToIndentLine.Description := FromIndentLine.Description;
+                    End;
+                    ToIndentLine.Modify();
+                UNTIL FromIndentLIne.NEXT = 0;
+        END;
+
+    end;
+
+}
