@@ -1,0 +1,52 @@
+action(BarCode)
+            {
+                ApplicationArea = All;
+                Caption = 'BarCode';
+                Image = Close;
+                trigger OnAction()
+                var
+                    Client: HttpClient;
+                    Content: HttpContent;
+                    response: HttpResponseMessage;
+                    URL: Text;
+                    RequestJson: JsonObject;
+                    RequestText: text;
+                    ContentHeaders: HttpHeaders;
+                    ResponseText: text;
+                    ResponseJson: JsonObject;
+                    ValueToken: JsonToken;
+                    BarcodeString: Text;
+                    BarCode: Text;
+                    Text001: Label 'Bar Code is generated';
+                    ImageGv: Codeunit Image;
+                    OutStrm: OutStream;
+                Begin
+                    //BarcodeString := Rec."No." + '|' + rec.Description + '|' + rec."FA Location Code";
+                    URL := 'https://barcodegenerators.azurewebsites.net/api/BarcodeGenerator?code=yxSEmiejyPJFAhhj_htHsrzzjcBZ8ga_hH5UzhT4V4zmAzFutVzBpA==';
+                    RequestJson.Add('value', BarcodeString);
+                    RequestJson.Add('imageHeight', '100');
+                    RequestJson.Add('imageWidth', '100');
+                    RequestJson.Add('margin', '0');
+                    RequestJson.Add('symbology', 'CODE_128');
+                    RequestJson.WriteTo(RequestText);
+                    Content.WriteFrom(RequestText);
+                    ContentHeaders.Clear();
+                    Content.GetHeaders(ContentHeaders);
+                    ContentHeaders.Remove('Content-Type');
+                    ContentHeaders.Add('Content-Type', 'application/json');
+                    if Client.Post(Url, Content, response) then begin
+                        response.Content.ReadAs(ResponseText);
+                        ResponseJson.ReadFrom(ResponseText);
+                        ResponseJson.Get('result', ValueToken);
+                        BarCode := ValueToken.AsValue().AsText();
+                        Clear(ValueToken);
+                        rec.BarCodeTest.CreateOutStream(OutStrm);
+                        ImageGv.FromBase64(BarCode);
+                        ImageGv.Save(OutStrm);
+                        rec.Modify();
+                        Message(Text001);
+                    end;
+                end;
+            }
+        }
+    }
