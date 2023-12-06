@@ -1,0 +1,101 @@
+field("Source No"; Rec."Source No")
+                {
+                    Caption = 'Source No.';
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies the value of the Source No. field';
+                    trigger OnValidate()
+                    begin
+                        GetData();
+                    end;
+
+                    trigger OnLookup(var Text: Text): Boolean
+                    var
+                        RecRef: RecordRef;
+                        FldRef: FieldRef;
+                        VarRecRef: Variant;
+                    begin
+                        case Rec."Phone Type" of
+                            rec."Phone Type"::Customer:
+                                RecRef.Open(Database::Customer);
+                            rec."Phone Type"::Vendor:
+                                RecRef.Open(Database::Vendor);
+                            rec."Phone Type"::Contact:
+                                RecRef.Open(Database::Contact);
+                            Rec."Phone Type"::Employee:
+                                RecRef.Open(Database::Employee);
+                        end;
+
+                        VarRecRef := RecRef;
+                        if Page.RunModal(0, VarRecRef) = Action::LookupOK then begin
+                            RecRef := VarRecRef;
+                            FldRef := RecRef.Field(1);
+                            rec."Source No" := FldRef.Value;
+                            GetData();
+                        end;
+                    end;
+                } 
+
+ local procedure GetData()
+    var
+        WhatsAppMgt: Codeunit "WHA WhatsApp Management";
+        RecRef: RecordRef;
+        FldRef: FieldRef;
+    begin
+        case rec."Phone Type" of
+            Rec."Phone Type"::Customer:
+                RecRef.Open(Database::Customer);
+            rec."Phone Type"::Vendor:
+                RecRef.Open(Database::Vendor);
+            rec."Phone Type"::Contact:
+                RecRef.Open(Database::Contact);
+            rec."Phone Type"::Employee:
+                RecRef.Open(Database::Employee);
+        end;
+
+        FldRef := RecRef.Field(1);
+        FldRef.SetRange(rec."Source No");
+        if RecRef.FindSet() then begin
+            if Rec."Phone Type" in [Rec."Phone Type"::Customer, Rec."Phone Type"::Vendor, rec."Phone Type"::Contact] then begin
+                FldRef := RecRef.Field(2);
+                rec."Receiver Name" := FldRef.Value;
+                FldRef := RecRef.Field(35);
+                Rec."country code" := FldRef.Value;
+                FldRef := RecRef.Field(9);
+                rec."Phone No" := FldRef.Value;
+            end else
+                if rec."Phone Type" = rec."Phone Type"::Employee then begin
+                    FldRef := RecRef.Field(2);
+                    rec."Receiver Name" := FldRef.Value;
+                    FldRef := RecRef.Field(4);
+                    if Format(FldRef.Value) <> '' then
+                        rec."Receiver Name" += ' ' + Format(FldRef.Value);
+                    FldRef := RecRef.Field(3);
+                    if Format(FldRef.Value) <> '' then
+                        rec."Receiver Name" += ' ' + Format(FldRef.Value);
+                    FldRef := RecRef.Field(25);
+                    Rec."country code" := FldRef.Value;
+                    FldRef := RecRef.Field(13);
+                    Rec."Phone No" := FldRef.Value;
+                end else
+                    InitData();
+        end else
+            InitData();
+
+        WhatsAppMgt.FormatPhoneNo(Rec."Phone No", rec."country code");
+    end; 
+  local procedure InitData()
+    var
+        CompanyInfo: Record "Company Information";
+        Country: Record "Country/Region";
+    begin
+        rec."Phone Type" := Rec."Phone Type"::" ";
+        Rec."Source No" := '';
+        rec."country code" := '';
+        rec."Phone No" := '';
+        rec."Receiver Name" := '';
+        Clear(rec.Message);
+        if CompanyInfo.Get() then
+            rec."country code" := CompanyInfo."Country/Region Code";
+        if Country.Get(rec."country code") then
+            Rec."country code" := '+' + Country."WHA Dial";
+    end;
