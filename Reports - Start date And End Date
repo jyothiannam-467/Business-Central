@@ -1,0 +1,28 @@
+ trigger OnPreDataItem()
+            begin
+                Judians.SetRange("Enrollment Year", StartDateGVar, EndDateGVar);
+            end;
+
+            trigger OnAfterGetRecord()
+
+            begin
+                if Judians.Status = Judians.Status::Passive then
+                    PassiveGVar += 1;
+
+                if Judians.Status = Judians.Status::Engaged then
+                    EngagedGVar += 1;
+
+                if Judians.Status = Judians.Status::"Special Case" then
+                    SpecialCaseGVar += 1;
+
+                if Judians."SJFL Status" = Judians."SJFL Status"::Relapse then
+                    NumberofrelapsedcasesGVar += 1;
+
+                if Judians."SJFL Status" = Judians."SJFL Status"::Expiry then
+                    NumberofexpiredcasesGVar += 1;
+
+                Judians1GRec.Reset();
+                Judians1GRec.SetFilter("Enrollment Year", '%1..%2', StartDateGVar, EndDateGVar);
+                if Judians1GRec.FindSet() then
+                    YearEnrollment := Judians1GRec.Count;
+            End;
