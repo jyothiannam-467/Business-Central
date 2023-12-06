@@ -49,4 +49,10 @@ action(BarCode)
                 end;
             }
         }
-    }
+    } 
+
+    field(3; BarCodeTest; Blob)
+        {
+            Caption='BarcodeTest';
+            DataClassification = CustomerContent;
+        }
