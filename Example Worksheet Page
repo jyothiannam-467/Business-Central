@@ -1,0 +1,256 @@
+page 50513 "Consultants Biometric B2B"
+{
+    ApplicationArea = All;
+    Caption = 'Consultants Biometric Details';
+    PageType = Worksheet;
+    UsageCategory = Tasks;
+    SourceTable = "Consultants Biometric B2B";
+    AutoSplitKey = true;
+
+    layout
+    {
+        area(content)
+        {
+            field(ConsultantID1; ConsultantID1)
+            {
+                Caption = 'Consultant ID';
+                ApplicationArea = all;
+                trigger OnLookup(Var Text: Text): Boolean;
+                begin
+                    if PAGE.RUNMODAL(0, ConsultantB2B) = ACTION::LookupOK then begin
+                        ConsultantID1 := ConsultantB2B."Consultant Code";
+                    end;
+                    SelectConsultant();
+                end;
+
+                trigger OnValidate()
+                begin
+                    ConsultantOnAfterValidate();
+                end;
+            }
+            field(CurrentYear; CurrentYear)
+            {
+                Caption = 'Year';
+                ToolTip = 'Specifies the year for which the payroll processing is being done / computed';
+                ApplicationArea = all;
+                trigger OnValidate();
+                begin
+                    CurrentYearOnAfterValidate();
+                end;
+            }
+            field(CurrentMonth; CurrentMonth)
+            {
+                Caption = 'Month';
+                ToolTip = 'Specifies the month for which the payroll processing is being done / computed';
+                ValuesAllowed = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12;
+                ApplicationArea = all;
+                trigger OnValidate();
+                begin
+                    CurrentMonthOnAfterValidate();
+                end;
+            }
+
+            repeater("Consultants Data")
+            {
+                Caption = 'Consultants Data';
+                field("Consultant ID"; Rec."Consultant ID")
+                {
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies the value of the Employee ID field.';
+                    //Visible = false;
+                }
+                field("Consultant Name"; Rec."Consultant Name")
+                {
+                    ApplicationArea = all;
+                }
+                field(Year; Rec.Year)
+                {
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies the value of the Year field.';
+                }
+                field(Month; Rec.Month)
+                {
+                    ApplicationArea = All;
+                    ValuesAllowed = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12;
+                    ToolTip = 'Specifies the value of the Month field.';
+                }
+                field("Line No."; Rec."Line No.")
+                {
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies the value of the Line No. field.';
+                    Visible = false;
+                }
+                field("Date"; Rec."Date")
+                {
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies the value of the Date field.';
+
+                }
+                field("Time In"; Rec."Time In")
+                {
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies the value of the Time In field.';
+                    //Editable = FieldsEditable;
+                }
+                field("Time Out"; Rec."Time Out")
+                {
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies the value of the Time Out field.';
+                    //Editable = FieldsEditable;
+                }
+                field("Hours Worked"; Rec."Hours Worked")
+                {
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies the value of the Hours Worked field.';
+                    Editable = FieldsEditable;
+                }
+                field(Sessions; Rec.Sessions)
+                {
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies the No of sessions value';
+                }
+                field("Amount Per Hour"; Rec."Amount Per Hour")
+                {
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies the value of the Amount Per Hour field.';
+                }
+                field("Total Amount"; Rec."Total Amount")
+                {
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies the value of the Total Amount field.';
+                    Editable = FieldsEditable;
+                }
+
+            }
+        }
+    }
+    actions
+    {
+        area(processing)
+        {
+            group(Navigations)
+            {
+                Caption = 'Navigation';
+                Image = Change;
+            }
+            action(Previous)
+            {
+                Caption = 'Previous';
+                Image = PreviousSet;
+                Promoted = true;
+                PromotedOnly = true;
+                PromotedCategory = Process;
+                PromotedIsBig = true;
+                ApplicationArea = all;
+                ToolTip = 'Specicfies the Employee Previous month details';
+                trigger OnAction();
+                begin
+                    if CurrentMonth = 1 then
+                        Rec.Year := CurrentYear - 1
+                    else
+                        Rec.Year := CurrentYear;
+                    if CurrentMonth = 1 then
+                        Rec.Month := 12
+                    else
+                        Rec.Month := CurrentMonth - 1;
+
+                    if ConsultantID1 = '' then
+                        ERROR(Text001Lbl);
+                    CurrentYear := Rec.Year;
+                    CurrentMonth := Rec.Month;
+                    SelectYear();
+                    SelectMonth();
+                end;
+            }
+            action(Next)
+            {
+                Caption = 'Next';
+                Image = NextSet;
+                Promoted = true;
+                PromotedOnly = true;
+                PromotedCategory = Process;
+                ApplicationArea = all;
+                ToolTip = 'Specicfies the Next Employee Details';
+
+                trigger OnAction();
+                begin
+                    if CurrentMonth = 12 then
+                        Rec.Year := CurrentYear + 1
+                    else
+                        Rec.Year := CurrentYear;
+                    if CurrentMonth = 12 then
+                        Rec.Month := 1
+                    else
+                        Rec.Month := CurrentMonth + 1;
+
+                    if ConsultantID1 = '' then
+                        ERROR(Text001Lbl);
+                    CurrentYear := Rec.Year;
+                    CurrentMonth := Rec.Month;
+                    SelectYear();
+                    SelectMonth();
+                end;
+            }
+        }
+    }
+    trigger OnAfterGetRecord()
+    begin
+        if ConsultantB2B.Get(Rec."Consultant ID") then begin
+            if ConsultantB2B."Session Payable" then
+                FieldsEditable := false;
+            if Not ConsultantB2B."Session Payable" then
+                FieldsEditable := true;
+        end;
+    end;
+
+    trigger OnOpenPage()
+    begin
+        ConsultantID1 := '';
+        SelectConsultant();
+        SelectMonth();
+        SelectYear();
+    end;
+
+    procedure SelectConsultant();
+    begin
+        Rec.SetRange("Consultant ID", ConsultantID1);
+        CurrPage.UPDATE(false);
+    end;
+
+    procedure SelectYear();
+    begin
+        Rec.SETRANGE(Year, CurrentYear);
+        CurrPage.UPDATE(false);
+    end;
+
+    procedure SelectMonth();
+    begin
+        Rec.SETRANGE(Month, CurrentMonth);
+        CurrPage.UPDATE(false);
+    end;
+
+    local procedure ConsultantOnAfterValidate();
+    begin
+        SelectConsultant();
+    end;
+
+    local procedure CurrentYearOnAfterValidate();
+    begin
+        SelectYear()
+    end;
+
+    local procedure CurrentMonthOnAfterValidate();
+    begin
+        SelectMonth();
+    end;
+
+    var
+        FieldsEditable: Boolean;
+        ConsultantB2B: Record "Consultant B2B";
+        ConsultantID1: Code[20];
+        CurrentMonth: Integer;
+        CurrentYear: Integer;
+        ConsultantList: Page "Consultants List B2B";
+        BttnFuncVisible: Boolean;
+        Text001Lbl: Label '"Please, Select Consultant "';
+}
