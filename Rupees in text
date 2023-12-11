@@ -1,0 +1,10 @@
+   column(NumberText1; NumberText[1])
+                {
+                }
+
+CLEAR(NumberText);
+CheckGRec.InitTextVariable;
+CheckGRec.FormatNoText(NumberText, ROUND(ABS(PayGrandTotal + DeductionsTotal), 1, '='), '');
+var
+        CheckGRec: Codeunit "Approval Mgmt B2B";
+        NumberText: array[2] of Text;
