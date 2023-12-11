@@ -1,0 +1,61 @@
+local procedure GetGSTAmounts(SalesLine: Record "Sales Line")
+    var
+        TaxTransactionValue: Record "Tax Transaction Value";
+        ComponentName: Code[30];
+        GSTSetup: Record "GST Setup";
+    begin
+        if not GSTSetup.Get() then
+            exit;
+        ComponentName := GetComponentName(SalesLine, GSTSetup);
+
+        if (SalesLine.Type <> SalesLine.Type::" ") then begin
+            TaxTransactionValue.Reset();
+            TaxTransactionValue.SetRange("Tax Record ID", SalesLine.RecordId);
+            TaxTransactionValue.SetRange("Tax Type", GSTSetup."GST Tax Type");
+            TaxTransactionValue.SetRange("Value Type", TaxTransactionValue."Value Type"::COMPONENT);
+            TaxTransactionValue.SetFilter(Percent, '<>%1', 0);
+            TaxTransactionValue.SetFilter("Value ID", '2|3|6');
+            if TaxTransactionValue.FindSet() then begin
+                repeat
+                    case TaxTransactionValue."Value ID" of
+                        6:
+                            begin
+                                SGSTAmount += Round(TaxTransactionValue.Amount, GetGSTRoundingPrecision(ComponentName));
+                                SGSTPer += TaxTransactionValue.Percent;
+                            end;
+                        2:
+                            begin
+                                CGSTAmount += Round(TaxTransactionValue.Amount, GetGSTRoundingPrecision(ComponentName));
+                                CGSTPer += TaxTransactionValue.Percent;
+                            end;
+                        3:
+                            begin
+                                IGSTAmount += Round(TaxTransactionValue.Amount, GetGSTRoundingPrecision(ComponentName));
+                                IGSTPer += TaxTransactionValue.Percent;
+                            end;
+                        10:
+                            TotalBaseAmount += Round(Abs(TaxTransactionValue.Amount), 0.01);
+
+                    end;
+                    TotalGSTPer += TaxTransactionValue.Percent;
+                until TaxTransactionValue.Next() = 0;
+                TotalGSTAmount := CGSTAmount + SGSTAmount + IGSTAmount;
+            end;
+        end;
+    end;
+
+    local procedure GetComponentName(SalesLine: Record "Sales Line";
+        GSTSetup: Record "GST Setup"): Code[30]
+    var
+        ComponentName: Code[30];
+    begin
+        if GSTSetup."GST Tax Type" = GSTLbl then
+            if SalesLine."GST Jurisdiction Type" = SalesLine."GST Jurisdiction Type"::Interstate then
+                ComponentName := IGSTLbl
+            else
+                ComponentName := CGSTLbl
+        else
+            if GSTSetup."Cess Tax Type" = GSTCESSLbl then
+                ComponentName := CESSLbl;
+        exit(ComponentName)
+    end;
