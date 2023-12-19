@@ -7,3 +7,57 @@
                             Rec."Machine No." := SelectonMgmt.GetSelectionFilter(RecRef, MachineCenter.FieldNo("No."));
                         end;
                     end;
+
+
+
+ field(13; "UID"; Code[2048])
+        {
+            Caption = 'UID';
+            DataClassification = CustomerContent;
+            //TableRelation = Judians;
+            trigger OnValidate()
+            var
+                JudiansRec: Record Judians;
+            begin
+                JudiansRec.Reset();
+                JudiansRec.SetFilter("UID", Rec."UID");
+                if not JudiansRec.FindFirst() then
+                    Rec.FieldError("UID")
+                else
+                    if not JudiansRec.Blocked then
+                        Rec."Judian Name" := JudiansRec."Judian Name";
+            end;
+
+            trigger OnLookup()
+            var
+                JudiansList: Page "Judian List";
+                JudiansRec: Record Judians;
+                SelectonMgmt: Codeunit SelectionFilterManagement;
+                RecRef: RecordRef;
+                JudianRec2: Record Judians;
+                ErrMsg: Label 'Please Select one Judian Only';
+            begin
+                JudiansRec.Reset();
+                JudiansList.LookupMode(true);
+                if JudiansList.RunModal() = Action::LookupOK then begin
+                    JudiansList.SetSelectionFilter(JudiansRec);
+                    if JudiansRec.FindSet() then begin
+                        RecRef.GetTable(JudiansRec);
+                        if not JudiansRec.Blocked then begin
+                            JudianIDs := SelectonMgmt.GetSelectionFilter(RecRef, JudiansRec.FieldNo(UID));
+                            if (Rec."Session Type" = Rec."Session Type"::"Individual Session") then begin
+                                JudianRec2.Reset();
+                                JudianRec2.SetFilter(UID, JudianIDs);
+                                if JudianRec2.FindSet() then begin
+                                    if JudianRec2.Count > 1 then
+                                        Error(ErrMsg);
+                                end;
+                            end;
+                            Rec.UID := JudianIDs;
+                            Rec."Judian Name" := SelectonMgmt.GetSelectionFilter(RecRef, JudiansRec.FieldNo("Judian Name"));
+                        end;
+                    end;
+                end;
+            End;
+        }
+    }
