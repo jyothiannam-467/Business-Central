@@ -1,0 +1,88 @@
+page 50301 "Custom CRM Role Center"
+{
+    Caption = 'CRM RC';
+    PageType = RoleCenter;
+
+    layout
+    {
+        area(RoleCenter)
+        {
+            part(Control104; "CRM HeadlineRC")
+            {
+                ApplicationArea = Basic, Suite;
+            }
+            part("CRM BlobVisual Cardpart"; "CRM BlobVisual Cardpart")
+            {
+                ApplicationArea = Basic, Suite;
+            }
+            part("CRM Proccessor Activities"; "CRM Proccessor Activities")
+            {
+                Caption = 'Activities';
+                ApplicationArea = all;
+            }
+        }
+    }
+
+    actions
+    {
+
+        area(Creation)
+        {
+            action("Patient Management")
+            {
+                ApplicationArea = Basic, Suite;
+                Caption = 'PMS';
+                RunObject = Page "PMS List";
+                ToolTip = 'Opens the PMS List.';
+            }
+            action("Judian")
+            {
+                ApplicationArea = Basic, Suite;
+                Caption = 'Judians';
+                RunObject = Page "Judian List";
+                ToolTip = 'Open the Judians List.';
+            }
+            action("Centers&Locations")
+            {
+                ApplicationArea = Basic, Suite;
+                Caption = 'Centers/Locations';
+                RunObject = Page "Centers and Locations";
+                RunPageMode = Create;
+                ToolTip = 'Open the Centers and Locations List.';
+            }
+            action("Counsellors Info")
+            {
+                ApplicationArea = Basic, Suite;
+                Caption = 'Counsellors';
+                RunObject = Page "Counsellors Card";
+                RunPageMode = Create;
+                ToolTip = 'Open the Counsellors Information.';
+            }
+            action("Partners Info")
+            {
+                ApplicationArea = Basic, Suite;
+                Caption = 'Partners';
+                RunObject = Page "Partner card";
+                RunPageMode = Create;
+                ToolTip = 'Open the Partners Information.';
+            }
+            action("Beneficiary Aid Info")
+            {
+                ApplicationArea = Basic, Suite;
+                Caption = 'Beneficiary Aid';
+                RunObject = Page "Benificiary Aid Card";
+                RunPageMode = Create;
+                ToolTip = 'Open the Beneficiary Aid Information.';
+            }
+            action("Languages Known")
+            {
+                ApplicationArea = Basic, Suite;
+                Caption = 'Languages';
+                RunObject = Page CRM_LanguageList;
+                RunPageMode = Create;
+                ToolTip = 'Open the Languages Information.';
+            }
+        }
+
+    }
+}
