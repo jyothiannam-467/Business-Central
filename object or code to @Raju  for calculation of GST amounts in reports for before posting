@@ -1,3 +1,4 @@
+
 local procedure GetGSTAmounts(SalesLine: Record "Sales Line")
     var
         TaxTransactionValue: Record "Tax Transaction Value";
