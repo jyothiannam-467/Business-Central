@@ -1,0 +1,17 @@
+    procedure RecipientStringToList(DelimitedRecipients: Text; var Recipients: List of [Text])
+    var
+        Seperators: Text;
+    begin
+        if DelimitedRecipients = '' then
+            exit;
+
+        Seperators := '; ,';
+        Recipients := DelimitedRecipients.Split(Seperators.Split());
+    end;
+
+
+     EmailList := DelChr(ToAddr, '>', ';');
+        RecipientStringToList(EmailList, ToList);
+
+  EmailList: Text;
+        ToList: List of [Text];
