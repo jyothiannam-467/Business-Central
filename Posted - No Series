@@ -1,0 +1,1 @@
+TransferHeader."No." := NoSeriesMgmt.GetNextNo(NoSeries.Code, WorkDate(), true);
