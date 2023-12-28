@@ -1,0 +1,37 @@
+trigger OnInsert()
+    var
+        FollowUpDetailsrec: Record "Follow Up Details";
+        ErrMsg: Label 'Please Select one Judian Only for the Individual Session';
+        FollowUpLineRec: Record "CRM Follow Up Line";
+        countLvar: Integer;
+    begin
+        FollowUpDetailsrec.Reset();
+        FollowUpDetailsrec.SetRange("Follow Up ID", Rec."Follow Up ID");
+        if FollowUpDetailsrec.FindFirst() then begin
+            Rec."Session Type" := FollowUpDetailsrec."Session Type";
+            FollowUpLineRec.Reset();
+            FollowUpLineRec.SetRange("Follow Up ID", FollowUpDetailsrec."Follow Up ID");
+            if FollowUpLineRec.FindSet() then begin
+                countLvar := FollowUpLineRec.Count;
+                if (FollowUpDetailsrec."Session Type" = FollowUpDetailsrec."Session Type"::"Individual Session") AND (countLvar >= 1) then
+                    Error(ErrMsg);
+            end;
+        end
+    end; 
+
+ field(12; "Session Type"; Option)
+        {
+            OptionMembers = "Individual Session","Group Discussion";
+            OptionCaption = 'Individual Session,Group Discussion';
+            DataClassification = CustomerContent;
+            trigger OnValidate()
+            var
+                FollowupDetailsLine: Record "CRM Follow Up Line";
+                Msg001Lbl: Label 'only Select one judian for individual Session , Multiple Judians Are not Allowed';
+            begin
+                FollowupDetailsLine.Reset();
+                FollowupDetailsLine.SetRange("Follow Up ID", Rec."Follow Up ID");
+                If FollowupDetailsLine.FindSet() then
+                    FollowupDetailsLine.ModifyAll(FollowupDetailsLine."Session Type", Rec."Session Type");
+            End;
+        }
