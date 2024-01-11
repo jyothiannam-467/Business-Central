@@ -1,0 +1,373 @@
+table 50324 "PDFV PDF Storage"
+{
+    Caption = 'PDF Storage';
+    DataClassification = CustomerContent;
+
+    fields
+    {
+        field(1; "Entry No."; BigInteger)
+        {
+            Caption = 'Entry No.';
+            DataClassification = CustomerContent;
+        }
+        field(2; "Source Record ID"; RecordId)
+        {
+            Caption = 'Source Record ID';
+            DataClassification = CustomerContent;
+        }
+        field(3; "PDF Value"; Media)
+        {
+            Caption = 'PDF Value';
+            DataClassification = CustomerContent;
+        }
+        field(4; Description; Text[200])
+        {
+            Caption = 'Description';
+            DataClassification = CustomerContent;
+        }
+        field(5; "Beneficiary Aid Doc"; Code[20])
+        {
+            Caption = 'Beneficiary Aid Doc';
+            DataClassification = CustomerContent;
+        }
+        field(6; "UID"; Code[20])
+        {
+            Caption = 'UID';
+            DataClassification = CustomerContent;
+        }
+        field(7; "Partner ID"; Code[20])
+        {
+            Caption = 'Partner ID';
+            DataClassification = CustomerContent;
+        }
+
+    }
+    keys
+    {
+        key(PK; "Entry No.")
+        {
+            Clustered = true;
+        }
+    }
+
+    trigger OnInsert()
+    var
+        PDFStorage: Record "PDFV PDF Storage";
+    begin
+        PDFStorage.Reset();
+        if PDFStorage.FindLast() then
+            Rec."Entry No." := PDFStorage."Entry No." + 1
+        else
+            Rec."Entry No." := 1;
+
+        Rec."Beneficiary Aid Doc" := Rec.GetFilter("Beneficiary Aid Doc");
+        Rec.UID := Rec.GetFilter(UID);
+        Rec."Partner ID" := Rec.GetFilter("Partner ID");
+    end;
+
+    procedure UploadContent()
+    var
+        InStreamVar: InStream;
+        OutStreamVar: OutStream;
+        FileName: Text;
+    begin
+        if not UploadIntoStream(UploadTitleLbl, '', FileFilterLbl, FileName, InStreamVar) then
+            exit;
+        Rec."PDF Value".ImportStream(InStreamVar, FileName);
+        Rec.Description := CopyStr(FileName, 1, MaxStrLen(Rec.Description));
+        Rec."Beneficiary Aid Doc" := Rec.GetFilter("Beneficiary Aid Doc");
+        Rec.UID := Rec.GetFilter(UID);
+        Rec."Partner ID" := Rec.GetFilter("Partner ID");
+    end;
+
+    procedure DownloadContent()
+    var
+        FileManagement: Codeunit "File Management";
+        VarOutStream: OutStream;
+        VarInStream: InStream;
+        FileName: Text;
+        TempBlob: Codeunit "Temp Blob";
+    begin
+        if not Rec."PDF Value".HasValue() then
+            exit;
+        TempBlob.CreateOutStream(VarOutStream);
+        Rec."PDF Value".ExportStream(VarOutStream);
+        TempBlob.CreateInStream(VarInStream);
+        FileName := Rec.Description;
+        DownloadFromStream(VarInStream, DownloadTitleLbl, '', FileFilterLbl, FileName);
+    end;
+
+    var
+        FileFilterLbl: Label 'PDF file(*.pdf)|*.pdf', Locked = true;
+        PDFExtLbl: Label '.pdf', Locked = true;
+        UploadTitleLbl: Label 'Upload PDF File';
+        DownloadTitleLbl: Label 'Download PDF File';
+}
+
+
+
+
+
+page 50348 "CRM PDFV PDF Viewer"
+{
+
+    Caption = 'PDF Viewer';
+    PageType = Card;
+    UsageCategory = None;
+    SourceTable = "PDFV PDF Storage";
+    layout
+    {
+        area(content)
+        {
+            group(General)
+            {
+                ShowCaption = false;
+                usercontrol(PDFViewer; "PDFV PDF Viewer")
+                {
+                    ApplicationArea = All;
+
+                    trigger ControlAddinReady()
+                    begin
+                        SetPDFDocument();
+                    end;
+                }
+            }
+        }
+    }
+    local procedure SetPDFDocument()
+    var
+        Base64Convert: Codeunit "Base64 Convert";
+        TempBlob: Codeunit "Temp Blob";
+        InStreamVar: InStream;
+        OutStreamVar: OutStream;
+        PDFAsTxt: Text;
+    begin
+        CurrPage.PDFViewer.SetVisible(Rec."PDF Value".HasValue());
+        if not Rec."PDF Value".HasValue() then
+            exit;
+        TempBlob.CreateOutStream(OutStreamVar);
+        Rec."PDF Value".ExportStream(OutStreamVar);
+        TempBlob.CreateInStream(InStreamVar);
+        PDFAsTxt := Base64Convert.ToBase64(InStreamVar);
+        CurrPage.PDFViewer.LoadPDF(PDFAsTxt, false);
+    end;
+}
+
+
+
+
+
+page 50349 "CRM PDFV PDF Viewer Factbox"
+{
+
+    Caption = 'PDF Viewer';
+    PageType = CardPart;
+    SourceTable = "PDFV PDF Storage";
+    // DeleteAllowed = false;
+    // InsertAllowed = false;
+    LinksAllowed = false;
+    RefreshOnActivate = true;
+
+
+    layout
+    {
+        area(content)
+        {
+            group(General)
+            {
+                ShowCaption = false;
+                Visible = ShowViewer;
+                usercontrol(PDFViewer;
+                "PDFV PDF Viewer")
+                {
+                    ApplicationArea = All;
+
+                    trigger ControlAddinReady()
+                    var
+                        PDFStorage: Record "PDFV PDF Storage";
+                    begin
+                        PDFStorage.Reset();
+                        PDFStorage.SetRange("Entry No.", Rec."Entry No.");
+                        If not PDFStorage.FindSet() then
+                            exit
+                        Else
+                            SetPDFDocument();
+                    end;
+
+                    trigger onView()
+                    var
+                        PDFStorage: Record "PDFV PDF Storage";
+                    begin
+                        PDFStorage.Reset();
+                        PDFStorage.SetRange("Entry No.", Rec."Entry No.");
+                        If not PDFStorage.FindSet() then
+                            exit
+                        Else
+                            RunFullView();
+                    end;
+                }
+            }
+        }
+    }
+    actions
+    {
+        area(Processing)
+        {
+            action(PDFVViewFullDocument)
+            {
+                ApplicationArea = All;
+                Image = View;
+                Caption = 'View';
+                ToolTip = 'View';
+                trigger OnAction()
+                begin
+                    RunFullView();
+                end;
+            }
+        }
+    }
+    local procedure SetPDFDocument()
+    var
+        Base64Convert: Codeunit "Base64 Convert";
+        TempBlob: Codeunit "Temp Blob";
+        InStreamVar: InStream;
+        OutStreamVar: OutStream;
+        PDFAsTxt: Text;
+    begin
+        if not (Rec."PDF Value".HasValue()) then
+            exit;
+
+        CurrPage.PDFViewer.SetVisible(Rec."PDF Value".HasValue());
+        TempBlob.CreateOutStream(OutStreamVar);
+        Rec."PDF Value".ExportStream(OutStreamVar);
+        TempBlob.CreateInStream(InStreamVar);
+        PDFAsTxt := Base64Convert.ToBase64(InStreamVar);
+        CurrPage.PDFViewer.LoadPDF(PDFAsTxt, true);
+    end;
+
+    procedure SetPDFRecord(EntryNo: BigInteger)
+    begin
+        if EntryNo = 0 then
+            ShowViewer := false
+        Else
+            ShowViewer := true;
+        Rec.Reset();
+        Rec.SetRange("Entry No.", EntryNo);
+        if Rec.FindFirst() then;
+        SetPDFDocument();
+        CurrPage.Update(false);
+    end;
+
+    local procedure RunFullView()
+    var
+        PDFViewerCard: Page "CRM PDFV PDF Viewer";
+    begin
+        Clear(PDFViewerCard);
+        if Rec.IsEmpty() then
+            exit;
+        PDFViewerCard.SetRecord(Rec);
+        PDFViewerCard.Run();
+    end;
+
+    var
+        ShowViewer: Boolean;
+
+}
+
+
+
+
+
+page 50350 "CRM PDFV PDF Storage"
+{
+
+    ApplicationArea = All;
+    Caption = 'Attachments';
+    PageType = List;
+    SourceTable = "PDFV PDF Storage";
+    UsageCategory = Lists;
+    RefreshOnActivate=true;
+
+    layout
+    {
+        area(content)
+        {
+            repeater(General)
+            {
+                field(Description; Rec.Description)
+                {
+                    ToolTip = 'Specifies the value of the Description field';
+                    ApplicationArea = All;
+                }
+            }
+        }
+        area(FactBoxes)
+        {
+            part(PDFViewerFactbox; "CRM PDFV PDF Viewer Factbox")
+            {
+                ApplicationArea = All;
+                Caption = 'View';
+            }
+        }
+    }
+    actions
+    {
+        area(Processing)
+        {
+            action(UploadContent)
+            {
+                ApplicationArea = All;
+                Image = MoveUp;
+                Caption = 'Upload';
+                ToolTip = 'Upload';
+                Promoted = true;
+                PromotedCategory = Process;
+                PromotedIsBig = true;
+                PromotedOnly = true;
+                trigger OnAction()
+                var
+                    SourceRecordID: RecordId;
+                    PDFViewerLRec: Record "PDFV PDF Storage";
+                    PDFStorage1: Page "CRM PDFV PDF Storage";
+                begin
+                    Rec.UploadContent();
+                    CurrPage.Update(true);
+                end;
+            }
+
+            action(DownloadContent)
+            {
+                ApplicationArea = All;
+                Image = MoveDown;
+                Caption = 'Download';
+                ToolTip = 'Download';
+                Promoted = true;
+                PromotedCategory = Process;
+                PromotedIsBig = true;
+                PromotedOnly = true;
+                trigger OnAction()
+                begin
+                    Rec.DownloadContent();
+                end;
+            }
+        }
+
+    }
+
+    trigger OnOpenPage()
+    begin
+        CurrPage.PDFViewerFactbox.Page.Activate();
+    end;
+
+    trigger OnDeleteRecord(): Boolean
+    begin
+        CurrPage.PDFViewerFactbox.Page.Update(True);
+    end;
+
+    trigger OnAfterGetCurrRecord()
+    begin
+        CurrPage.PDFViewerFactbox.Page.SetPDFRecord(Rec."Entry No.")
+    end;
+}
+
+
