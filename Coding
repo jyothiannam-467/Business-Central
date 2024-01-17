@@ -1,0 +1,1 @@
+  Rec.TestField("Import Type", ErrorInfo.Create(ImportTypeError, true, PurchaseHeader));
