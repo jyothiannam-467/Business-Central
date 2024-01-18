@@ -1,0 +1,39 @@
+reportextension 50001 PostedVoucherNew extends "Posted Voucher New1"
+{
+    dataset
+    {
+        add("G/L Entry")
+        {
+            column(PONarration; PONarration)
+            {
+
+            }
+        }
+        modify("G/L Entry")
+        {
+            trigger OnAfterAfterGetRecord()
+            var
+                VLEntry: Record "Vendor Ledger Entry";
+            begin
+                VLEntry.Reset();
+                VLEntry.SetRange("Document No.", "G/L Entry"."Document No.");
+                if VLEntry.FindFirst() then
+                    PONarration := VLEntry."PO Narration";
+            end;
+        }
+    }
+
+    rendering
+    {
+        layout(PostedVoucherNew)
+        {
+            Type = RDLC;
+            Caption = 'Posted Voucher New';
+            LayoutFile = './Posted Voucher.rdl';
+        }
+    }
+
+    var
+        PONarration: Code[50];
+
+}
