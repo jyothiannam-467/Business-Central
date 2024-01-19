@@ -1,1 +1,16 @@
-Opportunity to Sales Cycle – Part 1----Page::Sales Cycle,Tasks,Oppurtunities,Activities
+Opportunity to Sales Cycle –----Page::Sales Cycle,Tasks,Oppurtunities,Activities
+
+You can create opportunities from the Opportunity List page. Typically opportunities are created from a specific contact or salespeople.
+
+To start the sales cycle, user can click on “Activate first stage” in Oppurtunities Card
+
+If an opportunity follows a sales cycle, you can move it forward or back through the different stages, such as moving the next or previous stage, and even skipping a stage.
+On the Opportunity List page, choose the Update action. The Update Opportunity opens,
+Use the Action Type field to move the opportunity through the sales cycle stages:
+Next moves the opportunity forward one stage.
+Skip moves the opportunity forward one or several stages in the sales cycle, which you specify in the Presentation field. You can only skip stages that have been set up to allow skipping.
+Previous moves the opportunity back one stage.
+Jump moves the opportunity back one or several stages in the sales cycle, which you specify in the Presentation field.
+Update enables you to change information (such as to modify your evaluation of their chances of success and estimated values) without moving to another stage.
+
+
