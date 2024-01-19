@@ -1,0 +1,167 @@
+ actions
+    {
+        area(Processing)
+        {
+            group(Forms)
+            {
+                Caption = 'Forms';
+                Image = Action;
+                action("Base Enrollment")
+                {
+                    ApplicationArea = all;
+                    Caption = 'Base Enrollment';
+                    Ellipsis = true;
+                    Image = Create;
+                    ToolTip = 'Executes the Base Enrollment action.';
+                    trigger OnAction()
+                    begin
+                        BaseEnrollment();
+                        EnrollmentLRec.SetRange(UID, Rec.UID);
+                        if EnrollmentLRec.FindFirst() then
+                            Page.Run(Page::"CRM BaseEnrollmentCard", EnrollmentLRec);
+                    end;
+                }
+                action("Adolescent")
+                {
+                    ApplicationArea = all;
+                    Caption = 'Adolescent';
+                    Ellipsis = true;
+                    Image = Create;
+                    ToolTip = 'Executes the Adolescent action.';
+                    trigger OnAction()
+                    begin
+                        AdolescentJudian();
+                        AdolescentJudianLRec.SetRange(UID, Rec.UID);
+                        if AdolescentJudianLRec.FindFirst() then
+                            Page.Run(Page::"Adolescent Card", AdolescentJudianLRec);
+                    end;
+                }
+                action("Adult")
+                {
+                    ApplicationArea = all;
+                    Caption = 'Adult';
+                    Ellipsis = true;
+                    Image = Create;
+                    ToolTip = 'Executes the Adult action.';
+                    trigger OnAction()
+                    begin
+                        Adult1();
+                        AdultJudianLRec.SetRange(UID, Rec.UID);
+                        if AdultJudianLRec.FindFirst() then
+                            Page.Run(Page::"Adult Card", AdultJudianLRec);
+                    end;
+                }
+                action("Young Survivors")
+                {
+                    ApplicationArea = all;
+                    Caption = 'Young Survivors';
+                    Ellipsis = true;
+                    Image = Create;
+                    ToolTip = 'Executes the Young Survivors action.';
+                    trigger OnAction()
+                    begin
+                        YoungSurvivorsJudian1();
+                        YoungSurvivorsJudian.SetRange(UID, Rec.UID);
+                        if YoungSurvivorsJudian.FindFirst() then
+                            Page.Run(Page::"Young Survivor Card", YoungSurvivorsJudian);
+                    end;
+                }
+            }
+        }
+        area(Promoted)
+        {
+            group(Category_Category9)
+            {
+                Caption = 'Forms', Comment = 'Generated from the PromotedActionCategories property index 8.';
+                Image = Action;
+
+                actionref(BaseEnrollment_Promoted; "Base Enrollment")
+                {
+                }
+                actionref(Adolescent_Promoted; Adolescent)
+                {
+                }
+                actionref(Adult_Promoted; Adult)
+                {
+                }
+                actionref(YoungSurvivors_Promoted; "Young Survivors")
+                {
+                }
+            }
+            actionref(DocumentAttachmentDetails_Promoted; DocAttach)
+            {
+
+            }
+            actionref(CreateFollowup_promoted; "Create Follow Up")
+            {
+
+            }
+            actionref(FollowupScedhule_promoted; "Follow Up Schedule")
+            {
+
+            }
+            actionref(BeneficiaryAidDispersed_Promoted; "Beneficiary Aid Dispersed")
+            {
+
+            }
+            actionref(CreateAnnualFollowUp_Promoted; "Create Annual Follow Up")
+            {
+
+            }
+        }
+        area(Navigation)
+        {
+            action(DocAttach)
+            {
+                ApplicationArea = All;
+                Caption = 'Attachments';
+                Image = Attach;
+                ToolTip = 'Add a file as an attachment. You can attach images as well as documents.';
+                RunObject = Page "CRM PDFV PDF Storage";
+                RunPageLink = UID = field(UID);
+            }
+            action("Create Follow Up")
+            {
+                ApplicationArea = all;
+                Caption = 'Create Counseling Schedule';
+                RunPageOnRec = true;
+                RunPageMode = Create;
+                Image = CreateDocument;
+                ToolTip = 'Opens the Follow Up Details Document.';
+                trigger OnAction()
+                begin
+                    CreateFollowUp();
+                end;
+            }
+            action("Follow Up Schedule")
+            {
+                ApplicationArea = all;
+                Caption = 'Counseling Schedule History';
+                Image = List;
+                RunObject = page "Posted Schedules List";
+                RunPageLink = UID = field(UID);
+                ToolTip = 'Opens the Follow Up Details List.';
+
+            }
+            action("Beneficiary Aid Dispersed")
+            {
+                ApplicationArea = all;
+                Caption = 'Beneficiary Aid Dispersed';
+                RunObject = Page "Posted Benificiary Dis.List";
+                Image = List;
+                RunPageMode = View;
+                RunPageLink = UID = field(UID);
+                ToolTip = 'Opens the Beneficiary Aid Dispersed Details List.';
+            }
+            action("Create Annual Follow Up")
+            {
+                ApplicationArea = all;
+                Caption = 'Create Annual Follow Up';
+                RunObject = Page "CRM Annual Follow Up List";
+                Image = List;
+                RunPageMode = View;
+                RunPageLink = UID = field(UID);
+                ToolTip = 'Opens the Annual Follow Up List.';
+            }
+        }
+    }
