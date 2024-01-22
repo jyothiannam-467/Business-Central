@@ -1,0 +1,9 @@
+ WorkFlowEvent.Reset();
+  WorkFlowEvent.SetRange("Table ID", 50317);
+  if WorkFlowEvent.FindSet() then WorkFlowEvent.DeleteAll();
+  Commit();
+  WorkFlowEventH.CreateEventsLibrary();
+
+
+  WorkFlowEventH: Codeunit "Workflow Event Handling";
+  WorkFlowEvent: Record "Workflow Event";
