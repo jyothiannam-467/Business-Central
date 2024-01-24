@@ -9,3 +9,54 @@
     begin
         VendorLedgerEntry."PO Narration" := GenJournalLine."PO Narration";
     end;
+
+//Insert in Transfer shipment Header
+    [EventSubscriber(ObjectType::Table, DATABASE::"Transfer Shipment Header", OnAfterCopyFromTransferHeader, '', true, true)]
+    local procedure OnAfterCopyFromTransferHeader(var TransferShipmentHeader: Record "Transfer Shipment Header"; TransferHeader: Record "Transfer Header")
+    begin
+        TransferShipmentHeader."Header Remarks" := TransferHeader."Header Remarks";
+        TransferShipmentHeader."Line Remarks" := TransferHeader."Line Remarks";
+    end;
+    //Insert in Transfer Shipment Line
+    [EventSubscriber(ObjectType::Table, Database::"Transfer Shipment Line", OnAfterCopyFromTransferLine, '', true, true)]
+    local procedure OnAfterCopyFromTransferLine(var TransferShipmentLine: Record "Transfer Shipment Line"; TransferLine: Record "Transfer Line")
+    begin
+        TransferShipmentLine."Header Remark" := TransferLine."Header Remarks";
+        TransferShipmentLine."Line Remark" := TransferLine."Line Remarks";
+    end;
+    //Insert in Transfer Receipt Header
+    [EventSubscriber(ObjectType::Table, Database::"Transfer Receipt Header", OnAfterCopyFromTransferHeader, '', true, true)]
+    local procedure OnAfterCopyFromTransferHeaderRcpt(var TransferReceiptHeader: Record "Transfer Receipt Header"; TransferHeader: Record "Transfer Header")
+    begin
+        TransferReceiptHeader."Header Remarks" := TransferHeader."Header Remarks";
+        TransferReceiptHeader."Line Remarks" := TransferHeader."Line Remarks";
+    end;
+    //Insert in Transfer Receipt Line
+    [EventSubscriber(ObjectType::Table, Database::"Transfer Receipt Line", OnAfterCopyFromTransferLine, '', true, true)]
+    local procedure OnAfterCopyFromTransferRcptLine(var TransferReceiptLine: Record "Transfer Receipt Line"; TransferLine: Record "Transfer Line")
+    begin
+        TransferReceiptLine."Header Remark" := TransferLine."Header Remarks";
+        TransferReceiptLine."Line Remark" := TransferLine."Line Remarks";
+    end;
+    //Insert in Item Journal Line
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"TransferOrder-Post Shipment", OnAfterCreateItemJnlLine, '', true, true)]
+    local procedure OnAfterCreateItemJnlLine(var ItemJournalLine: Record "Item Journal Line"; TransferLine: Record "Transfer Line"; TransferShipmentHeader: Record "Transfer Shipment Header"; TransferShipmentLine: Record "Transfer Shipment Line")
+    begin
+        ItemJournalLine."Header Remarks" := TransferShipmentLine."Header Remark";
+        ItemJournalLine."Line Remarks" := TransferShipmentLine."Line Remark";
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"TransferOrder-Post Receipt", OnBeforePostItemJournalLine, '', true, true)]
+    local procedure OnBeforePostItemJournalLine(var ItemJournalLine: Record "Item Journal Line"; TransferLine: Record "Transfer Line"; TransferReceiptHeader: Record "Transfer Receipt Header"; TransferReceiptLine: Record "Transfer Receipt Line"; CommitIsSuppressed: Boolean; TransLine: Record "Transfer Line"; PostedWhseRcptHeader: Record "Posted Whse. Receipt Header")
+    begin
+        ItemJournalLine."Header Remarks" := TransferReceiptLine."Header Remark";
+        ItemJournalLine."Line Remarks" := TransferReceiptLine."Line Remark";
+    end;
+    //Insert in Item Ledger Entry
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Item Jnl.-Post Line", OnAfterInitItemLedgEntry, '', true, true)]
+    local procedure OnAfterInitItemLedgEntry(var NewItemLedgEntry: Record "Item Ledger Entry"; var ItemJournalLine: Record "Item Journal Line")
+    begin
+        NewItemLedgEntry."Header Remark" := ItemJournalLine."Header Remarks";
+        NewItemLedgEntry."Line Remark" := ItemJournalLine."Line Remarks";
+    end;
+
