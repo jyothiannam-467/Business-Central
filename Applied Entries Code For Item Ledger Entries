@@ -1,0 +1,87 @@
+   procedure FindAppliedEntries(ItemLedgEntry: Record "Item Ledger Entry"; var TempItemLedgerEntry: Record "Item Ledger Entry" temporary)
+    var
+        ItemApplnEntry: Record "Item Application Entry";
+    begin
+        //with ItemLedgEntry do
+        if ItemLedgEntry.Positive then begin
+            ItemApplnEntry.Reset();
+            ItemApplnEntry.SetCurrentKey("Inbound Item Entry No.", "Outbound Item Entry No.", "Cost Application");
+            ItemApplnEntry.SetRange("Inbound Item Entry No.", ItemLedgEntry."Entry No.");
+            ItemApplnEntry.SetFilter("Outbound Item Entry No.", '<>%1', 0);
+            ItemApplnEntry.SetRange("Cost Application", true);
+            if ItemApplnEntry.Find('-') then
+                repeat
+                    InsertTempEntry(TempItemLedgerEntry, ItemApplnEntry."Outbound Item Entry No.", ItemApplnEntry.Quantity, ItemApplnEntry."Posting Date");
+                until ItemApplnEntry.Next() = 0;
+        end else begin
+            ItemApplnEntry.Reset();
+            ItemApplnEntry.SetCurrentKey("Outbound Item Entry No.", "Item Ledger Entry No.", "Cost Application");
+            ItemApplnEntry.SetRange("Outbound Item Entry No.", ItemLedgEntry."Entry No.");
+            ItemApplnEntry.SetRange("Item Ledger Entry No.", ItemLedgEntry."Entry No.");
+            ItemApplnEntry.SetRange("Cost Application", true);
+            if ItemApplnEntry.Find('-') then
+                repeat
+                    InsertTempEntry(TempItemLedgerEntry, ItemApplnEntry."Inbound Item Entry No.", -ItemApplnEntry.Quantity, ItemApplnEntry."Posting Date");
+                until ItemApplnEntry.Next() = 0;
+        end;
+    end;
+
+    local procedure InsertTempEntry(var TempItemLedgerEntry: Record "Item Ledger Entry" temporary; EntryNo: Integer; AppliedQty: Decimal; LastOutwardDate: Date)
+    var
+        ItemLedgEntry: Record "Item Ledger Entry";
+        IsHandled: Boolean;
+    begin
+        ItemLedgEntry.Get(EntryNo);
+
+        IsHandled := false;
+        if IsHandled then
+            exit;
+
+        if AppliedQty * ItemLedgEntry.Quantity < 0 then
+            exit;
+
+        if not TempItemLedgerEntry.Get(EntryNo) then begin
+            TempItemLedgerEntry.Init();
+            TempItemLedgerEntry := ItemLedgEntry;
+            TempItemLedgerEntry.Quantity := AppliedQty;
+            TempItemLedgerEntry."Posting Date" := LastOutwardDate;
+            TempItemLedgerEntry.Insert();
+        end else begin
+            TempItemLedgerEntry.Quantity := TempItemLedgerEntry.Quantity + AppliedQty;
+            TempItemLedgerEntry."Posting Date" := LastOutwardDate;
+            TempItemLedgerEntry.Modify();
+        end;
+    end;
+
+    local procedure PurchageFieldsUpdate(ItemLedgerEntry: Record "Item Ledger Entry"): Date
+    var
+        Item: Record Item;
+        ILE: Record "Item Ledger Entry";
+        ILE2: Record "Item Ledger Entry";
+        Application: Record "Item Application Entry";
+        Application2: Record "Item Application Entry";
+        TempItemLedgerEntry: Record "Item Ledger Entry" temporary;
+    begin
+        //  with ItemLedgerEntry do begin
+        if ItemLedgerEntry.Quantity > 0 then begin
+            Application.Reset();
+            Application.SetRange("Inbound Item Entry No.", ItemLedgerEntry."Entry No.");
+            Application.SetFilter("Item Ledger Entry No.", '<>%1', ItemLedgerEntry."Entry No.");
+            if Application.FindFirst() then
+                repeat
+                    if ILE.get(Application."Inbound Item Entry No.") then begin
+                        //  if (ILE."Entry Type" = ILE."Entry Type" in [Purchase] then begin
+                        FindAppliedEntries(ItemLedgerEntry, TempItemLedgerEntry);
+                        if TempItemLedgerEntry.FindSet() then
+                            repeat
+                                //if TempItemLedgerEntry."Entry Type" = TempItemLedgerEntry."Entry Type"::Consumption then begin
+                                // RPONo := TempItemLedgerEntry."Document No.";
+                                LastOutwardDate := TempItemLedgerEntry."Posting Date";
+                            // ProjectCode := TempItemLedgerEntry."Global Dimension 2 Code";
+                            until TempItemLedgerEntry.Next() = 0;
+                    end;
+                //   end;
+                //end;
+                until Application.Next() = 0;
+        end;
+    End;
