@@ -95,3 +95,38 @@ codeunit 80000 Posted
             until PostedDispatchLine.Next() = 0;
     end;
 }
+
+
+
+
+
+
+
+
+
+
+  CRMGroupSessionLines.Reset();
+        CRMGroupSessionLines.SetRange("Session No.", Rec."Session No.");
+        if CRMGroupSessionLines.FindLast() then
+            LineNo := CRMGroupSessionLines."Line No." + 10000
+        else
+            LineNo := 10000;
+
+        JudiansRec.Reset();
+        JudiansRec.SetRange(Blocked, false);
+        JudiansList.SetTableView(JudiansRec);
+        Commit();
+        JudiansList.LookupMode(true);
+        if JudiansList.RunModal() = Action::LookupOK then begin
+            JudiansRec.Reset();
+            JudiansList.SetSelectionFilter(JudiansRec);
+            if JudiansRec.FindSet() then
+                repeat
+                    CRMGroupSessionLines.Init();
+                    CRMGroupSessionLines."Session No." := Rec."Session No.";
+                    CRMGroupSessionLines."Line No." := LineNo;
+                    CRMGroupSessionLines.Validate(UID, JudiansRec.UID);
+                    CRMGroupSessionLines.Insert();
+                    LineNo += 10000;
+                until JudiansRec.Next() = 0;
+        end;
