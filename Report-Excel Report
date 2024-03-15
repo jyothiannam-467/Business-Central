@@ -675,3 +675,111 @@ Report 50310 "Patient Profile "
         ExcelBuffer: Record "Excel Buffer" temporary;
         WindPa: Dialog;
 }
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------
+report 90001 "ProductionOrder Details1"
+{
+    ApplicationArea = All;
+    Caption = 'ProductionOrder Details1';
+    ProcessingOnly = true;
+    UsageCategory = ReportsAndAnalysis;
+    dataset
+    {
+        dataitem(Integer; Integer)
+        {
+            MaxIteration = 1;
+            trigger OnAfterGetRecord()
+            begin
+                ProductionOrder.Reset();
+                ProductionOrder.SetRange(Status, ProductionOrder.Status::Released);
+                ProductionOrder.SetRange("Sale Odrer No.", SaleOrderNo);
+                if ProductionOrder.FindSet() then begin
+                    ProductionOrderLine.Reset();
+                    ProductionOrderLine.SetRange(Status, ProductionOrderLine.Status::Released);
+                    ProductionOrderLine.SetRange("Prod. Order No.", ProductionOrder."No.");
+                    if ProductionOrderLine.FindSet() then begin
+                        Excelbuffer.NewRow();
+                        Excelbuffer.AddColumn(ProductionOrder."Sale Odrer No.", false, '', false, false, false, '', excelbuffer."Cell Type"::Number);
+                        Excelbuffer.AddColumn(ProductionOrderLine."Prod. Order No.", false, '', false, false, false, '', excelbuffer."Cell Type"::Number);
+                        repeat
+                            Excelbuffer.AddColumn(ProductionOrderLine."Item No.", false, '', false, false, false, '', excelbuffer."Cell Type"::Number);
+                            Excelbuffer.AddColumn(ProductionOrderLine.Description, false, '', false, false, false, '', excelbuffer."Cell Type"::Text);
+                            Excelbuffer.AddColumn(ProductionOrderLine.quantity, false, '', false, false, false, '', excelbuffer."Cell Type"::Number);
+                            Excelbuffer.AddColumn(ProductionOrderLine."Finished Quantity", false, '', false, false, false, '', excelbuffer."Cell Type"::Number);
+                            Excelbuffer.NewRow();
+                            Excelbuffer.AddColumn('', false, '', false, false, false, '', excelbuffer."Cell Type"::Number);
+                            Excelbuffer.AddColumn('', false, '', false, false, false, '', excelbuffer."Cell Type"::Number);
+                        until ProductionOrderLine.Next() = 0;
+                    end;
+                end;
+            End;
+
+            trigger OnPostDataItem();
+            begin
+                ExcelBuffer.CreateNewBook(ReportFileName);
+                ExcelBuffer.WriteSheet(ReportFileName, CompanyName, UserId);
+                ExcelBuffer.CloseBook();
+                ExcelBuffer.SetFriendlyFilename(ReportFileName);
+                ExcelBuffer.OpenExcel();
+            end;
+
+            trigger OnPreDataItem()
+            begin
+                CreateExcelHeader();
+            end;
+
+        }
+    }
+    requestpage
+    {
+        layout
+        {
+            area(content)
+            {
+                group(General)
+                {
+                    field(SaleOrderNo; SaleOrderNo)
+                    {
+                        ApplicationArea = All;
+                        Caption = 'Sales Order No.';
+                        TableRelation = "Sales Header"."No.";
+                    }
+                }
+            }
+        }
+
+    }
+
+    trigger OnInitReport()
+    begin
+        excelbuffer.DeleteAll();
+    end;
+
+
+    procedure CreateExcelHeader()
+    begin
+        Excelbuffer.NewRow();
+        Excelbuffer.AddColumn('Sales Order No.', false, '', true, false, false, '', excelbuffer."Cell Type"::Text);
+        Excelbuffer.AddColumn('Production No.', false, '', true, false, false, '', excelbuffer."Cell Type"::Text);
+        Excelbuffer.AddColumn('Item No.', false, '', true, false, false, '', excelbuffer."Cell Type"::Text);
+        Excelbuffer.AddColumn('Item Description', false, '', true, false, false, '', excelbuffer."Cell Type"::Text);
+        Excelbuffer.AddColumn('Order Quantity', false, '', true, false, false, '', excelbuffer."Cell Type"::Text);
+        Excelbuffer.AddColumn('Output Quantity', false, '', true, false, false, '', excelbuffer."Cell Type"::Text);
+    end;
+
+    var
+        Excelbuffer: Record "Excel Buffer" temporary;
+
+        SaleOrderNo: Code[20];
+        ItemNo: Code[20];
+        Description: Text[100];
+        ProductionOrder: Record "Production Order";
+
+        ProductionOrderLine: Record "Prod. Order Line";
+
+        ReportFileName: Label 'Production Order Details';
+}
+
