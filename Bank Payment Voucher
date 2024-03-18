@@ -1,0 +1,25 @@
+ [EventSubscriber(ObjectType::Codeunit, Codeunit::"Gen. Jnl.-Post", 'OnCodeOnAfterCheckTemplate', '', false, false)]
+    local procedure OnCodeOnAfterCheckTemplate(var GenJnlLine: Record "Gen. Journal Line")
+    var
+        GenJnlBatchRec: Record "Gen. Journal Batch";
+        BeneficiaryAidDispersedRec: Record "Posted Ben. Aid Dispersed";
+        GenJnlLime1: Record "Gen. Journal Line";
+    begin
+        GenJnlBatchRec.Reset();
+        GenJnlBatchRec.SetRange("Journal Template Name", GenJnlLine."Journal Template Name");
+        GenJnlBatchRec.SetRange(Name, GenJnlLine."Journal Batch Name");
+        if GenJnlBatchRec.FindFirst() then begin
+            GenJnlLime1.Reset();
+            GenJnlLime1.SetRange("Journal Template Name", GenJnlBatchRec."Journal Template Name");
+            GenJnlLime1.SetRange("Journal Batch Name", GenJnlBatchRec.Name);
+            if GenJnlLime1.FindFirst() then
+                repeat
+                    BeneficiaryAidDispersedRec.Reset();
+                    BeneficiaryAidDispersedRec.SetRange("Benificiary Aid Doc No", GenJnlLime1."Benificiary Aid Doc No");
+                    if BeneficiaryAidDispersedRec.FindSet() then begin
+                        BeneficiaryAidDispersedRec.Posted := true;
+                        BeneficiaryAidDispersedRec.Modify();
+                    End;
+                Until GenJnlLime1.Next() = 0;
+        end;
+    end;
