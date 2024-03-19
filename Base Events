@@ -60,3 +60,7 @@
         NewItemLedgEntry."Line Remark" := ItemJournalLine."Line Remarks";
     end;
 
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+OnPostGLAccOnAfterInitGLEntry---After Posting GenJnlLines > GL Etries Will Hit
+
