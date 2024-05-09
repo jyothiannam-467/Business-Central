@@ -64,3 +64,9 @@
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 OnPostGLAccOnAfterInitGLEntry---After Posting GenJnlLines > GL Etries Will Hit
 
+---------------------------------------------------------------------------------------------------------
+Item Journal Lines----Item Ledger Entries(Sales / Purchase)
+
+Item Journal Line - Table -OnAfterCopyItemJnlLineFromSalesLine
+Codeunit::"Item Jnl.-Post Line"---OnBeforeInsertItemLedgEntry
+
