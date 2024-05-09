@@ -1,0 +1,2 @@
+ModifyAllowed = true;
+Permissions = tabledata "G/L Entry" = RIMD;
