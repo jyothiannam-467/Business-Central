@@ -1,0 +1,75 @@
+namespace ZBA.Integration.B2B;
+using Microsoft.Inventory.Tracking;
+using Microsoft.Sales.Document;
+codeunit 60023 "B2B NAV2NAV Single Instance"
+{
+    // +#DOCU#
+    // 300 2018-10-09 kvs.dde 12478: created
+    // 
+    // -#DOCU#
+
+    SingleInstance = true;
+
+    trigger OnRun()
+    begin
+    end;
+
+    var
+        SkipNAV2NAVSalesEvents: Boolean;
+        TrackingSpecificationG: Record "Tracking Specification";
+        ReservationEnrtyG: Record "Reservation Entry";
+        SalesHeaderG: Record "Sales Header";
+        SaleslineG: Record "Sales Line";
+
+
+    procedure SetSkipNAV2NAVSalesEvents(SkipNAV2NAVSalesEventsPar: Boolean)
+    begin
+        SkipNAV2NAVSalesEvents := SkipNAV2NAVSalesEventsPar;
+    end;
+
+
+    procedure GetSkipNAV2NAVSalesEvents(): Boolean
+    begin
+        EXIT(SkipNAV2NAVSalesEvents);
+    end;
+
+    procedure GetReservation(var TrackingSpecificationP: Record "Tracking Specification"; var ReservationEnrtyP: Record "Reservation Entry")
+    var
+    begin
+        TrackingSpecificationP := TrackingSpecificationG;
+        ReservationEnrtyP := ReservationEnrtyG;
+    end;
+
+    procedure SetReservation(TrackingSpecificationP: Record "Tracking Specification"; ReservationEnrtyP: Record "Reservation Entry")
+    var
+    begin
+        TrackingSpecificationG := TrackingSpecificationP;
+        ReservationEnrtyG := ReservationEnrtyP;
+    end;
+
+    procedure SetHeaderOrders(var SalesheaderP: Record "Sales Header")
+    var
+    begin
+        SalesheaderG := SalesheaderP;
+    end;
+
+    procedure GetHeaderOrders(var SalesheaderVar: Record "Sales Header")
+    var
+    begin
+        SalesheaderVar := SalesHeaderG;
+    end;
+
+    procedure SetLineOrders(var SalesLineP: Record "Sales Line")
+    var
+    begin
+        SalesLineG := SalesLineP;
+    end;
+
+    procedure GetLineOrders(var SalesLineVar: Record "Sales Line")
+    var
+    begin
+        SalesLineVar := SaleslineG;
+    end;
+}
+
+
