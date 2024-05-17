@@ -1,10 +1,12 @@
-     [IntegrationEvent(false, false)]
-    Procedure OnSendInspectionReceiptForApproval(var InspectionReceipt : Record "Inspection Receipt Header B2B")
+codeunit 50102 "Approvals Codeunit"
+{
+    [IntegrationEvent(false, false)]
+    Procedure OnSendInspectionReceiptForApproval(var InspectionReceipt: Record "Inspection Receipt Header B2B")
     begin
     end;
 
     [IntegrationEvent(false, false)]
-    Procedure OnCancelInspectionReceiptForApproval(var InspectionReceipt : Record "Inspection Receipt Header B2B")
+    Procedure OnCancelInspectionReceiptForApproval(var InspectionReceipt: Record "Inspection Receipt Header B2B")
     begin
     end;
 
@@ -16,7 +18,7 @@
 
 
     [EventSubscriber(ObjectType::Codeunit, codeunit::"Approvals Codeunit", 'OnSendInspectionReceiptForApproval', '', true, true)]
-    local procedure RunworkflowonsendInspectionReceiptForApproval(var InspectionReceipt : Record "Inspection Receipt Header B2B")
+    local procedure RunworkflowonsendInspectionReceiptForApproval(var InspectionReceipt: Record "Inspection Receipt Header B2B")
     begin
         WorkflowManagement.HandleEvent(RunworkflowOnSendInspectionReceiptforApprovalCode(), InspectionReceipt);
     end;
@@ -28,7 +30,7 @@
 
     [EventSubscriber(ObjectType::Codeunit, codeunit::"Approvals Codeunit", 'OnCancelInspectionReceiptForApproval', '', true, true)]
 
-    local procedure RunworkflowonCancelInspectionReceiptForApproval(var InspectionReceipt : Record "Inspection Receipt Header B2B")
+    local procedure RunworkflowonCancelInspectionReceiptForApproval(var InspectionReceipt: Record "Inspection Receipt Header B2B")
     begin
         WorkflowManagement.HandleEvent(RunworkflowOncancelInspectionReceiptforApprovalCode(), InspectionReceipt);
     end;
@@ -59,14 +61,14 @@
         end;
     end;
 
-    procedure ISInspectionReceiptworkflowenabled(var InspectionReceipt : Record "Inspection Receipt Header B2B"): Boolean
+    procedure ISInspectionReceiptworkflowenabled(var InspectionReceipt: Record "Inspection Receipt Header B2B"): Boolean
     begin
         if InspectionReceipt."Approval Status" <> InspectionReceipt."Approval Status"::Open then
             exit(false);
         exit(WorkflowManagement.CanExecuteWorkflow(InspectionReceipt, RunworkflowOnSendInspectionReceiptforApprovalCode()));
     end;
 
-    Procedure CheckInspectionReceiptApprovalsWorkflowEnabled(var InspectionReceipt : Record "Inspection Receipt Header B2B"): Boolean
+    Procedure CheckInspectionReceiptApprovalsWorkflowEnabled(var InspectionReceipt: Record "Inspection Receipt Header B2B"): Boolean
     begin
         IF not ISInspectionReceiptworkflowenabled(InspectionReceipt) then
             Error((NoworkfloweableErr));
@@ -82,7 +84,7 @@
             Database::"Inspection Receipt Header B2B":
                 begin
                     RecRef.SetTable(InspectionReceipt);
-                    ApprovalEntryArgument."Document No." := FORMAT(InspectionReceipt."Spec ID");
+                    ApprovalEntryArgument."Document No." := FORMAT(InspectionReceipt."No.");
                 end;
         end;
     end;
@@ -95,7 +97,7 @@
         InspectionReceipt: Record "Inspection Receipt Header B2B";
     begin
         case RecRef.Number() of
-            Database::"Ins Datasheet Header B2B":
+            Database::"Inspection Receipt Header B2B":
                 begin
                     RecRef.SetTable(InspectionReceipt);
                     InspectionReceipt."Approval Status" := InspectionReceipt."Approval Status"::Open;
@@ -114,7 +116,7 @@
             Database::"Inspection Receipt Header B2B":
                 begin
                     RecRef.SetTable(InspectionReceipt);
-                    InspectionReceipt."Approval Status" := InspectionReceipt."Approval Status"::Release;
+                    InspectionReceipt."Approval Status" := InspectionReceipt."Approval Status"::Released;
                     InspectionReceipt.Modify();
                     Handled := true;
                 end;
@@ -193,8 +195,8 @@
         workflowstepargument: record "Workflow Step Argument";
         Blankdateformula: DateFormula;
     begin
-        workflowsetup.PopulateWorkflowStepArgument(workflowstepargument, workflowstepargument."Approver Type"::Approver, workflowstepargument."Approver Limit Type"::"Direct Approver", 0, '', Blankdateformula, true);
-
+        workflowsetup.InitWorkflowStepArgument(workflowstepargument, workflowstepargument."Approver Type"::Approver, workflowstepargument."Approver Limit Type"::"Direct Approver", 0, '', Blankdateformula, true);
+        //workflowsetup.PopulateWorkflowStepArgument(workflowstepargument, workflowstepargument."Approver Type"::Approver, workflowstepargument."Approver Limit Type"::"Direct Approver", 0, '', Blankdateformula, true);
         workflowsetup.InsertDocApprovalWorkflowSteps(workflow, BuildInspectionReceipttypecondition(InspectionReceipt."Approval Status"::Open), RunworkflowOnSendInspectionReceiptforApprovalCode(), BuildInspectionReceipttypecondition(InspectionReceipt."Approval Status"::"Pending Approval"), RunworkflowOnCancelInspectionReceiptforApprovalCode(), workflowstepargument, true);
     end;
 
@@ -227,7 +229,7 @@
     //Add QC InspectionReceipt Approval End  <<
     //B2BMS  End
 
-var
+    var
         WorkflowManagement: Codeunit "Workflow Management";
         WorkflowevenHandling: Codeunit "Workflow Event Handling";
         workflowsetup: codeunit "Workflow Setup";
@@ -240,10 +242,12 @@ var
         InspectionReceiptCategoryTxt: Label 'InspectionReceiptpecifications';
         InspectionReceiptDocOCRWorkflowCodeTxt: Label 'QC InspectionReceipt';
         InspectionReceiptApprWorkflowDescTxt: Label 'InspectionReceipt Approval Workflow';
-        NoworkfloweableErr : Label 'No work flows enabled';
-        
-        
+        NoworkfloweableErr: Label 'No work flows enabled';
+
+
 
     //B2BMS  End Variables for QC
-       
-       
+
+
+
+}
