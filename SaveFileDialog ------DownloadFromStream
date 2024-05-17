@@ -1,0 +1,17 @@
+  field(PathName; PathName)
+                    {
+                        Caption = 'Output File Name';
+                        ApplicationArea = All;
+                        Visible = false;
+
+                        trigger OnAssistEdit()
+                        var
+                            Instream: InStream;
+                            ToFile: Text;
+                            TempBlob: Codeunit "Temp Blob";
+                        begin
+                            TempBlob.CreateInStream(Instream);
+                            // PathName := FileMgmt.SaveFileDialog(C_BLS002, '', C_BLS003);
+                            DownloadFromStream(Instream, C_BLS002, '', C_BLS003, ToFile)
+                        end;
+                    }
