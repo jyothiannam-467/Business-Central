@@ -251,3 +251,47 @@ codeunit 50102 "Approvals Codeunit"
 
 
 }
+
+
+---------------------------------------------------------------------------------------------------------------------------------------
+
+Kumari -----------
+codeunit 60500 "Purchase Qoute Codeunit"
+{
+    [EventSubscriber(ObjectType::Page, Page::"Requests to Approve", OnAfterActionEvent, 'Approve', false, false)]
+    local procedure OnAfterActionEvent_RequeststoApprove(var Rec: Record "Approval Entry")
+    var
+        PurchHeader: Record "Purchase Header";
+        PurchQuoteToOrder: Codeunit "Purch.-Quote to Order";
+    begin
+        if (Rec."Table ID" <> Database::"Purchase Header")
+            or (Rec."Document Type" <> Rec."Document Type"::Quote) then
+            exit;
+        if PurchHeader.get(Rec."Document Type"::Quote, Rec."Document No.")
+           And (PurchHeader.Status = PurchHeader.Status::Released) then
+            PurchQuoteToOrder.Run(PurchHeader);
+    end;
+
+    [EventSubscriber(ObjectType::Page, Page::"Purchase Quote", OnAfterActionEvent, 'Approve', false, false)]
+    local procedure OnAfterActionEvent_PurchaseQuote(var Rec: Record "Purchase Header")
+    var
+        PurchHeader: Record "Purchase Header";
+        PurchQuoteToOrder: Codeunit "Purch.-Quote to Order";
+    begin
+        if PurchHeader.get(Rec."Document Type"::Quote, Rec."No.")
+           And (PurchHeader.Status = PurchHeader.Status::Released) then
+            PurchQuoteToOrder.Run(PurchHeader);
+    end;
+
+    [EventSubscriber(ObjectType::Page, Page::"Purchase Quote", OnAfterActionEvent, 'SendApprovalRequest', false, false)]
+    local procedure SendApprovalRequest_PurchaseQuote(var Rec: Record "Purchase Header")
+    var
+        PurchHeader: Record "Purchase Header";
+        PurchQuoteToOrder: Codeunit "Purch.-Quote to Order";
+    begin
+        if PurchHeader.get(Rec."Document Type"::Quote, Rec."No.")
+           And (PurchHeader.Status = PurchHeader.Status::Released) then
+            PurchQuoteToOrder.Run(PurchHeader);
+    end;
+}
+
