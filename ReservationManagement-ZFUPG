@@ -1,0 +1,164 @@
+ local procedure GetSourceDocument(ReservationEntry: Record "Reservation Entry") SourceRecRef: RecordRef
+    var
+        Salesline: Record "Sales Line";
+        RequisitionLine: Record "Requisition Line";
+        ProductionOrdCompLine: Record "Prod. Order Component";
+        PurchaseLine: Record "Purchase Line";
+        ItemJournalLine: Record "Item Journal Line";
+        ItemLedgerEntry: Record "Item Ledger Entry";
+        ProdOrderLine: Record "Prod. Order Line";
+        PlanningComponent: Record "Planning Component";
+        TransferLine: Record "Transfer Line";
+        ServiceLine: Record "Service Line";
+        JobJournalLine: Record "Job Journal Line";
+        JobPlanningLine: Record "Job Planning Line";
+        AssemblyHeader: Record "Assembly Header";
+        AssemblyLine: Record "Assembly Line";
+        InvtDocumentLine: Record "Invt. Document Line";
+        ZBAprodOrderStore: Record ZBAProdOrderStore;
+    begin
+        case ReservationEntry."Source Type" of
+            Database::"Sales Line":
+                Begin
+                    Salesline.Reset();
+                    Salesline.SetRange("Document Type", ReservationEntry."Source Subtype");
+                    Salesline.SetRange("Document No.", ReservationEntry."Source ID");
+                    Salesline.SetRange("Line No.", ReservationEntry."Source Ref. No.");
+                    if Salesline.FindFirst() then
+                        SourceRecRef.GetTable(Salesline);
+                End;
+            Database::"Requisition Line":
+                Begin
+                    RequisitionLine.Reset();
+                    RequisitionLine.SetRange("Worksheet Template Name", ReservationEntry."Source ID");
+                    RequisitionLine.SetRange("Journal Batch Name", ReservationEntry."Source Batch Name");
+                    RequisitionLine.SetRange("Line No.", ReservationEntry."Source Ref. No.");
+                    if RequisitionLine.FindFirst() then
+                        SourceRecRef.GetTable(RequisitionLine);
+                End;
+            Database::"Purchase Line":
+                Begin
+                    PurchaseLine.Reset();
+                    PurchaseLine.SetRange("Document Type", ReservationEntry."Source Subtype");
+                    PurchaseLine.SetRange("Document No.", ReservationEntry."Source ID");
+                    PurchaseLine.SetRange("Line No.", ReservationEntry."Source Ref. No.");
+                    if PurchaseLine.FindFirst() then
+                        SourceRecRef.GetTable(PurchaseLine);
+                End;
+            Database::"Item Journal Line":
+                Begin
+                    ItemJournalLine.Reset();
+                    ItemJournalLine.SetRange("Journal Template Name", ReservationEntry."Source ID");
+                    ItemJournalLine.SetRange("Journal Batch Name", ReservationEntry."Source Batch Name");
+                    ItemJournalLine.SetRange("Line No.", ReservationEntry."Source Ref. No.");
+                    if ItemJournalLine.FindFirst() then
+                        SourceRecRef.GetTable(ItemJournalLine);
+                End;
+            Database::"Item Ledger Entry":
+                Begin
+                    ItemLedgerEntry.Reset();
+                    ItemLedgerEntry.SetRange("Entry No.", ReservationEntry."Source Ref. No.");
+                    if ItemLedgerEntry.FindSet() then
+                        SourceRecRef.GetTable(ItemLedgerEntry);
+                End;
+            Database::"Prod. Order Line":
+                Begin
+                    ProdOrderLine.Reset();
+                    ProdOrderLine.SetRange(Status, ReservationEntry."Source Subtype");
+                    ProdOrderLine.SetRange("Prod. Order No.", ReservationEntry."Source ID");
+                    ProdOrderLine.SetRange("Line No.", ReservationEntry."Source Prod. Order Line");
+                    if ProdOrderLine.FindFirst() then
+                        SourceRecRef.GetTable(ProdOrderLine);
+                End;
+            Database::"Prod. Order Component":
+                begin
+                    ProductionOrdCompLine.Reset();
+                    ProductionOrdCompLine.SetRange(Status, ReservationEntry."Source Subtype");
+                    ProductionOrdCompLine.SetRange("Prod. Order No.", ReservationEntry."Source ID");
+                    ProductionOrdCompLine.SetRange("Prod. Order Line No.", ReservationEntry."Source Prod. Order Line");
+                    ProductionOrdCompLine.SetRange("Line No.", ReservationEntry."Source Ref. No.");
+                    if ProductionOrdCompLine.FindFirst() then
+                        SourceRecRef.GetTable(ProductionOrdCompLine);
+                end;
+            Database::"Planning Component":
+                begin
+                    PlanningComponent.Reset();
+                    PlanningComponent.SetRange("Worksheet Template Name", ReservationEntry."Source ID");
+                    PlanningComponent.SetRange("Worksheet Batch Name", ReservationEntry."Source Batch Name");
+                    PlanningComponent.SetRange("Worksheet Line No.", ReservationEntry."Source Prod. Order Line");
+                    PlanningComponent.SetRange("Line No.", ReservationEntry."Source Ref. No.");
+                    if PlanningComponent.FindFirst() then
+                        SourceRecRef.GetTable(PlanningComponent);
+                end;
+            Database::"Transfer Line":
+                begin
+                    TransferLine.Reset();
+                    TransferLine.SetRange("Document No.", ReservationEntry."Source ID");
+                    TransferLine.SetRange("Line No.", ReservationEntry."Source Ref. No.");
+                    if TransferLine.FindFirst() then
+                        SourceRecRef.GetTable(TransferLine);
+                end;
+            Database::"Service Line":
+                begin
+                    ServiceLine.Reset();
+                    ServiceLine.SetRange("Document Type", ReservationEntry."Source Subtype");
+                    ServiceLine.SetRange("Document No.", ReservationEntry."Source ID");
+                    ServiceLine.SetRange("Line No.", ReservationEntry."Source Ref. No.");
+                    if ServiceLine.FindFirst() then
+                        SourceRecRef.GetTable(ServiceLine);
+                end;
+            Database::"Job Journal Line":
+                begin
+                    JobJournalLine.Reset();
+                    JobJournalLine.SetRange("Journal Template Name", ReservationEntry."Source ID");
+                    JobJournalLine.SetRange("Journal Batch Name", ReservationEntry."Source Batch Name");
+                    JobJournalLine.SetRange("Line No.", ReservationEntry."Source Ref. No.");
+                    if JobJournalLine.FindFirst() then
+                        SourceRecRef.GetTable(JobJournalLine);
+                end;
+            Database::"Job Planning Line":
+                begin
+                    JobPlanningLine.Reset();
+                    JobPlanningLine.SetCurrentKey("Job Contract Entry No.");
+                    JobPlanningLine.SetRange("Job Contract Entry No.", ReservationEntry."Source Ref. No.");
+                    if JobPlanningLine.FindFirst() then
+                        SourceRecRef.GetTable(JobPlanningLine);
+                end;
+            Database::"Assembly Header":
+                begin
+                    AssemblyHeader.Reset();
+                    AssemblyHeader.SetRange("Document Type", ReservationEntry."Source Subtype");
+                    AssemblyHeader.SetRange("No.", ReservationEntry."Source ID");
+                    if AssemblyHeader.FindFirst() then
+                        SourceRecRef.GetTable(AssemblyHeader);
+                end;
+            Database::"Assembly Line":
+                begin
+                    AssemblyLine.Reset();
+                    AssemblyLine.SetRange("Document Type", ReservationEntry."Source Subtype");
+                    AssemblyLine.SetRange("Document No.", ReservationEntry."Source ID");
+                    AssemblyLine.SetRange("Line No.", ReservationEntry."Source Ref. No.");
+                    if AssemblyLine.FindFirst() then
+                        SourceRecRef.GetTable(AssemblyLine);
+                end;
+            Database::"Invt. Document Line":
+                begin
+                    InvtDocumentLine.Reset();
+                    InvtDocumentLine.SetRange("Document Type", ReservationEntry."Source Subtype");
+                    InvtDocumentLine.SetRange("Document No.", ReservationEntry."Source ID");
+                    InvtDocumentLine.SetRange("Line No.", ReservationEntry."Source Ref. No.");
+                    if InvtDocumentLine.FindFirst() then
+                        SourceRecRef.GetTable(InvtDocumentLine);
+                end;
+            Database::ZBAProdOrderStore:
+                begin
+                    ZBAprodOrderStore.Reset();
+                    ZBAprodOrderStore.SetRange(Status, ReservationEntry."Source Subtype");
+                    ZBAprodOrderStore.SetRange("Prod. Order No.", ReservationEntry."Source ID");
+                    ZBAprodOrderStore.SetRange("Prod. Order Line No.", ReservationEntry."Source Prod. Order Line");
+                    ZBAprodOrderStore.SetRange("Line No.", ReservationEntry."Source Ref. No.");
+                    if ZBAprodOrderStore.FindFirst() then
+                        SourceRecRef.GetTable(ZBAprodOrderStore);
+                end;
+        end;
+    end;
