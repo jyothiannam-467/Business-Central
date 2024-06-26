@@ -1,0 +1,1056 @@
+namespace ZBA.Bank.Ledger;
+
+using Microsoft.Finance.GeneralLedger.Journal;
+using Microsoft.Foundation.Address;
+using Microsoft.Sales.Receivables;
+using Microsoft.Purchases.Payables;
+using System.Utilities;
+using Microsoft.Purchases.Vendor;
+using Microsoft.Sales.Customer;
+using Microsoft.Finance.GeneralLedger.Posting;
+using Microsoft.Foundation.Company;
+using Microsoft.Finance.GeneralLedger.Setup;
+using System.Utilities;
+using Microsoft.Bank.BankAccount;
+using ZBA.Payment.Ledger;
+using Microsoft.Foundation.NoSeries;
+using System.IO;
+using ZBA.Report.Utilities;
+using System.Utilities;
+using ZBA.System.Utilities;
+report 60279 ZBAInhouseBank
+{
+    // +#DOCU
+    // 001 14.11.2006 kvs.stw 2.23 Created
+    // 002 02.08.2007 kvs.cs  070703 ZFFN 2.23-01: don't check amount + currency
+    // 003 06.10.2008 kvs.hpk 081006 ZFFN 2.23-01: set source code
+    // 004 04.03.2010 kvs.cs  090318 ZFFR 2.32-04: change Amount on AMNT2
+    // 
+    // 300 2015-01-16 kvs.tm  10017 ZFFN 1.01: Changing File-Management
+    // 301 2015-05-06 kvs.tm  10146 ZFNL 2.32: No TESTFIELD on "Bank Branch No." and "Direction Code"
+    // 302 2015-07-17 kvs.cs  10339 Correction for Inhouse Bank
+    // 303 2015-07-17 kvs.cs  10306 Add Currency Code for Bank line in Gen. Journal
+    // 304 2015-10-02 kvs.tm  10447 ZFFN 2.32: Changes for Prepayment Entry fields
+    // 305 2015-11-13 kvs.tm  10519: Expanded for "Cash Receipt Journal"
+    //                               Change "Document Type" from Payment to Refund
+    // 306 2016-06-02 zf.rf   10748: Set "Document Type" via GenJnlLine2
+    // 307 2016-08-10 kvs.cs  10825: new function DeleteCharNoNumber --> Change Bank Branch No.
+    // 308 2017-03-10 kvs.tm  11300: Setup "With Avis" from vendor
+    //                               Get "Proposal" from vendor
+    //                               New placeholder 10 for "Proposal" (= Description)
+    // 309 2023-05-24 zf.rh  NAV-800: Correct "Balance (LCY)" when payment line will be created and voided
+    // -#DOCU
+    // 
+    //  //Placeholders Proposal
+    //   %1  = External Document No.
+    //   %2  = Applies-to Doc. No.
+    //   %3  = Document Date
+    //   %4  = Amount
+    //   %5  = Not Available
+    //   %6  = Document Amount
+    //   %7  = Posting Date
+    //   %8  = Currency Code
+    //   %9  = Applies-to Doc. Type
+    //   %10 = Description
+
+    Caption = 'InhouseBank';
+    ProcessingOnly = true;
+    ApplicationArea = All;
+    UsageCategory = ReportsAndAnalysis;
+    dataset
+    {
+        dataitem(InhouseLine; "Gen. Journal Line")
+        {
+            DataItemTableView = SORTING("Journal Template Name", "Journal Batch Name", "Account Type", "Currency Code", "Account No.", "Amount (LCY)");
+
+            trigger OnAfterGetRecord()
+            var
+                CountryLoc: Record "Country/Region";
+                VendLedgEntryLoc: Record "Vendor Ledger Entry";
+                CustLedgEntryLoc: Record "Cust. Ledger Entry";
+                VendorLoc: Record Vendor;
+                VendorBankLoc: Record "Vendor Bank Account";
+                CustomerLoc: Record Customer;
+                CustomerBankLoc: Record "Customer Bank Account";
+                CountryCodeLoc: Code[10];
+                CurrCodeLoc: Code[20];
+                LineDescrLoc: Text[49];
+                DirCodeLoc: Code[2];
+                PaymentToForeignCountryLoc: Boolean;
+                TestStrLoc: Text[30];
+            begin
+                // +305
+                IF CallFromCashReceiptJournal THEN BEGIN
+                    IF NOT ("Account Type" = "Account Type"::Customer) THEN BEGIN
+                        ERROR(C_BLS0002, "Line No.", InhouseBank.TABLECAPTION);
+                    END;
+                END;
+
+                IF NOT CallFromCashReceiptJournal THEN
+                    // -305
+                    IF NOT ("Account Type" = "Account Type"::Vendor) THEN
+                        ERROR(C_BLS0002, "Line No.", InhouseBank.TABLECAPTION);
+
+                TESTFIELD("Inhouse File created", FALSE);
+
+                // +002
+                TESTFIELD("Bal. Account Type", "Bal. Account Type"::"Bank Account");
+                TESTFIELD("Bal. Account No.");
+                IF InhouseBank."No." <> '' THEN
+                    TESTFIELD("Bal. Account No.", InhouseBank."No.");
+                InhouseBank.GET("Bal. Account No.");
+                // -002
+                AvisCreated := FALSE;
+
+                // +308
+                GetWithAvisAndProposal("Account Type", "Account No.", WithAvis, Proposal);
+                // -308
+
+                // +308
+                //IF NOT PaymentSetup."With Avis" THEN
+                IF NOT WithAvis THEN
+                    // -308
+                    CreatePaymentline(InhouseLine);
+
+                // +002
+                PostingDate := "Posting Date";
+                // -002
+                VendorCustomerAmount := Amount;
+
+                // +305
+                IF InhouseLine."Account Type" = InhouseLine."Account Type"::Vendor THEN BEGIN
+                    // -305
+                    VendLedgEntryLoc.RESET;
+                    VendLedgEntryLoc.SETCURRENTKEY("External Document No.", "Document Type", "Vendor No.");
+                    VendLedgEntryLoc.SETRANGE("External Document No.", "External Document No.");
+                    VendLedgEntryLoc.SETRANGE("Document Type", "Applies-to Doc. Type");
+                    VendLedgEntryLoc.SETRANGE("Vendor No.", "Account No.");
+                    IF VendLedgEntryLoc.FIND('-') THEN
+                        LineDescrLoc := COPYSTR(
+                          // +308
+                          //STRSUBSTNO(PaymentSetup."Vendor Proposal","External Document No.","Applies-to Doc. No.",VendLedgEntryLoc."Document Date",
+                          //Amount,VendLedgEntryLoc.Amount-Amount,VendLedgEntryLoc.Amount,"Posting Date","Currency Code","Applies-to Doc. Type"),
+                          STRSUBSTNO(Proposal, "External Document No.", "Applies-to Doc. No.", VendLedgEntryLoc."Document Date",
+                          Amount, VendLedgEntryLoc.Amount - Amount, VendLedgEntryLoc.Amount, "Posting Date", "Currency Code", "Applies-to Doc. Type",
+                          Description),
+                            // -308
+                            1, MAXSTRLEN(LineDescrLoc))
+                    ELSE
+                        LineDescrLoc := COPYSTR(
+                        // +308
+                        //STRSUBSTNO(PaymentSetup."Vendor Proposal","External Document No.","Applies-to Doc. No.","Document Date",Amount,
+                        //  "Payment Discount %",Amount,"Posting Date","Currency Code","Applies-to Doc. Type"),
+                        STRSUBSTNO(Proposal, "External Document No.", "Applies-to Doc. No.", "Document Date", Amount,
+                          "Payment Discount %", Amount, "Posting Date", "Currency Code", "Applies-to Doc. Type",
+                          Description),
+                            // -308
+                            1, MAXSTRLEN(LineDescrLoc));
+                    // +305
+                END;
+
+                IF InhouseLine."Account Type" = InhouseLine."Account Type"::Customer THEN BEGIN
+                    CustLedgEntryLoc.RESET;
+                    CustLedgEntryLoc.SETCURRENTKEY("Document Type", "External Document No.", "Customer No.");
+                    CustLedgEntryLoc.SETRANGE("External Document No.", "External Document No.");
+                    CustLedgEntryLoc.SETRANGE("Document Type", "Applies-to Doc. Type");
+                    CustLedgEntryLoc.SETRANGE("Customer No.", "Account No.");
+                    IF CustLedgEntryLoc.FINDFIRST THEN BEGIN
+                        LineDescrLoc := COPYSTR(
+                          // +308
+                          //STRSUBSTNO(PaymentSetup."Vendor Proposal","External Document No.","Applies-to Doc. No.",VendLedgEntryLoc."Document Date",
+                          //Amount,CustLedgEntryLoc.Amount-Amount,CustLedgEntryLoc.Amount,"Posting Date","Currency Code","Applies-to Doc. Type"),
+                          STRSUBSTNO(Proposal, "External Document No.", "Applies-to Doc. No.", VendLedgEntryLoc."Document Date",
+                          Amount, CustLedgEntryLoc.Amount - Amount, CustLedgEntryLoc.Amount, "Posting Date", "Currency Code", "Applies-to Doc. Type",
+                          Description),
+                            // -308
+                            1, MAXSTRLEN(LineDescrLoc))
+                    END ELSE BEGIN
+                        LineDescrLoc := COPYSTR(
+                        // +308
+                        //STRSUBSTNO(PaymentSetup."Vendor Proposal","External Document No.","Applies-to Doc. No.","Document Date",Amount,
+                        //  "Payment Discount %",Amount,"Posting Date","Currency Code","Applies-to Doc. Type"),
+                        STRSUBSTNO(Proposal, "External Document No.", "Applies-to Doc. No.", "Document Date", Amount,
+                          "Payment Discount %", Amount, "Posting Date", "Currency Code", "Applies-to Doc. Type",
+                          Description),
+                            // -308
+                            1, MAXSTRLEN(LineDescrLoc));
+                    END;
+                END;
+                // -305
+
+                // +308
+                //IF PaymentSetup."With Avis" THEN BEGIN
+                IF WithAvis THEN BEGIN
+                    // -308
+                    GenJnlLine2.RESET;
+                    GenJnlLine2.SETCURRENTKEY("Journal Template Name", "Journal Batch Name", "Account Type", "Currency Code", "Account No.",
+                      "Amount (LCY)");
+                    GenJnlLine2.SETRANGE("Journal Template Name", "Journal Template Name");
+                    GenJnlLine2.SETRANGE("Journal Batch Name", "Journal Batch Name");
+                    GenJnlLine2.SETRANGE("Account Type", "Account Type");
+                    GenJnlLine2.SETRANGE("Account No.", "Account No.");
+                    IF GenJnlLine2.COUNT >= PaymentSetup."No. of Entries" THEN BEGIN
+                        AvisCreated := TRUE;
+                        LineDescrLoc := '';
+                    END;
+                    CreatePaymentline(InhouseLine);
+                    GenJnlLine2.SETFILTER("Line No.", '<>%1', InhouseLine."Line No.");
+                    IF GenJnlLine2.FIND('-') THEN BEGIN
+                        REPEAT
+                            VendorCustomerAmount := VendorCustomerAmount + GenJnlLine2.Amount;
+                            CreatePaymentline(GenJnlLine2);
+                            IF NOT AvisCreated THEN BEGIN
+                                // +305
+                                IF InhouseLine."Account Type" = InhouseLine."Account Type"::Vendor THEN BEGIN
+                                    // -305
+                                    VendLedgEntryLoc.RESET;
+                                    VendLedgEntryLoc.SETCURRENTKEY("External Document No.", "Document Type", "Vendor No.");
+                                    VendLedgEntryLoc.SETRANGE("External Document No.", "External Document No.");
+                                    VendLedgEntryLoc.SETRANGE("Document Type", "Applies-to Doc. Type");
+                                    VendLedgEntryLoc.SETRANGE("Vendor No.", "Account No.");
+                                    IF VendLedgEntryLoc.FIND('-') THEN
+                                        LineDescrLoc := COPYSTR(LineDescrLoc + ',' +
+                                          // +308
+                                          //STRSUBSTNO(PaymentSetup."Vendor Proposal",GenJnlLine2."External Document No.",GenJnlLine2."Applies-to Doc. No.",
+                                          //  VendLedgEntryLoc."Document Date",GenJnlLine2.Amount,VendLedgEntryLoc.Amount-GenJnlLine2.Amount,
+                                          //  VendLedgEntryLoc.Amount,GenJnlLine2."Posting Date",GenJnlLine2."Currency Code",GenJnlLine2."Applies-to Doc. Type"),
+                                          STRSUBSTNO(Proposal, GenJnlLine2."External Document No.", GenJnlLine2."Applies-to Doc. No.",
+                                            VendLedgEntryLoc."Document Date", GenJnlLine2.Amount, VendLedgEntryLoc.Amount - GenJnlLine2.Amount,
+                                            VendLedgEntryLoc.Amount, GenJnlLine2."Posting Date", GenJnlLine2."Currency Code", GenJnlLine2."Applies-to Doc. Type",
+                                            GenJnlLine2.Description),
+                                            // -308
+                                            1, MAXSTRLEN(LineDescrLoc))
+                                    ELSE
+                                        LineDescrLoc := COPYSTR(LineDescrLoc + ',' +
+                                          // +308
+                                          //STRSUBSTNO(PaymentSetup."Vendor Proposal",GenJnlLine2."External Document No.",GenJnlLine2."Applies-to Doc. No.",
+                                          //GenJnlLine2."Document Date",GenJnlLine2.Amount,GenJnlLine2."Payment Discount %",GenJnlLine2.Amount,
+                                          //GenJnlLine2."Posting Date",GenJnlLine2."Currency Code",GenJnlLine2."Applies-to Doc. Type"),
+                                          STRSUBSTNO(Proposal, GenJnlLine2."External Document No.", GenJnlLine2."Applies-to Doc. No.",
+                                            GenJnlLine2."Document Date", GenJnlLine2.Amount, GenJnlLine2."Payment Discount %", GenJnlLine2.Amount,
+                                            GenJnlLine2."Posting Date", GenJnlLine2."Currency Code", GenJnlLine2."Applies-to Doc. Type",
+                                            GenJnlLine2.Description),
+                                            // -308
+                                            1, MAXSTRLEN(LineDescrLoc));
+                                    // +305
+                                END;
+                                IF InhouseLine."Account Type" = InhouseLine."Account Type"::Customer THEN BEGIN
+                                    CustLedgEntryLoc.RESET;
+                                    CustLedgEntryLoc.SETCURRENTKEY("Document Type", "External Document No.", "Customer No.");
+                                    CustLedgEntryLoc.SETRANGE("External Document No.", "External Document No.");
+                                    CustLedgEntryLoc.SETRANGE("Document Type", "Applies-to Doc. Type");
+                                    CustLedgEntryLoc.SETRANGE("Customer No.", "Account No.");
+                                    IF CustLedgEntryLoc.FIND('-') THEN
+                                        LineDescrLoc := COPYSTR(LineDescrLoc + ',' +
+                                          // +308
+                                          //STRSUBSTNO(PaymentSetup."Vendor Proposal",GenJnlLine2."External Document No.",GenJnlLine2."Applies-to Doc. No.",
+                                          //  CustLedgEntryLoc."Document Date",GenJnlLine2.Amount,CustLedgEntryLoc.Amount-GenJnlLine2.Amount,
+                                          //  CustLedgEntryLoc.Amount,GenJnlLine2."Posting Date",GenJnlLine2."Currency Code",GenJnlLine2."Applies-to Doc. Type"),
+                                          STRSUBSTNO(Proposal, GenJnlLine2."External Document No.", GenJnlLine2."Applies-to Doc. No.",
+                                            CustLedgEntryLoc."Document Date", GenJnlLine2.Amount, CustLedgEntryLoc.Amount - GenJnlLine2.Amount,
+                                            CustLedgEntryLoc.Amount, GenJnlLine2."Posting Date", GenJnlLine2."Currency Code", GenJnlLine2."Applies-to Doc. Type",
+                                            GenJnlLine2.Description),
+                                            // -308
+                                            1, MAXSTRLEN(LineDescrLoc))
+                                    ELSE
+                                        LineDescrLoc := COPYSTR(LineDescrLoc + ',' +
+                                          STRSUBSTNO(
+                                            // +308
+                                            //PaymentSetup."Vendor Proposal",GenJnlLine2."External Document No.",GenJnlLine2."Applies-to Doc. No.",
+                                            //GenJnlLine2."Document Date",GenJnlLine2.Amount,GenJnlLine2."Payment Discount %",GenJnlLine2.Amount,
+                                            //GenJnlLine2."Posting Date",GenJnlLine2."Currency Code",GenJnlLine2."Applies-to Doc. Type"),
+                                            Proposal, GenJnlLine2."External Document No.", GenJnlLine2."Applies-to Doc. No.",
+                                            GenJnlLine2."Document Date", GenJnlLine2.Amount, GenJnlLine2."Payment Discount %", GenJnlLine2.Amount,
+                                            GenJnlLine2."Posting Date", GenJnlLine2."Currency Code", GenJnlLine2."Applies-to Doc. Type",
+                                            GenJnlLine2.Description),
+                                            // -308
+                                            1, MAXSTRLEN(LineDescrLoc));
+                                END;
+                                // -305
+                            END;
+                        UNTIL GenJnlLine2.NEXT = 0;
+                        GET(GenJnlLine2."Journal Template Name", GenJnlLine2."Journal Batch Name", GenJnlLine2."Line No.");
+                    END;
+                END;
+
+                IF AvisCreated THEN BEGIN
+                    LineDescrLoc := COPYSTR(
+                    STRSUBSTNO(PaymentSetup."Avis Proposal", "External Document No.", "Applies-to Doc. No.", "Document Date", Amount,
+                      "Payment Discount %", VendorCustomerAmount, "Posting Date", "Currency Code", "Applies-to Doc. Type"), 1, MAXSTRLEN(LineDescrLoc))
+                END;
+
+                // +305
+                IF InhouseLine."Account Type" = InhouseLine."Account Type"::Vendor THEN BEGIN
+                    // -305
+
+                    VendorLoc.GET("Account No.");
+
+                    // +002
+                    //InhouseBank.RESET;
+                    //InhouseBank.SETRANGE("Inhouse Bank",TRUE);
+                    //InhouseBank.FIND('-');
+                    // -002
+                    VendorBankLoc.RESET;
+                    VendorBankLoc.SETRANGE("Vendor No.", VendorLoc."No.");
+                    VendorBankLoc.SETRANGE("Inhouse Bank", TRUE);
+                    IF NOT VendorBankLoc.FIND('-') THEN
+                        ERROR(
+                          C_BLS0004, VendorBankLoc.TABLECAPTION, VendorBankLoc.FIELDCAPTION("Inhouse Bank"), TRUE,
+                          VendorLoc.TABLECAPTION, VendorLoc."No.");
+
+                    //Check Vendor
+                    IF VendorLoc."Country/Region Code" = '' THEN
+                        CountryCodeLoc := CompanyInfo."Country/Region Code"
+                    ELSE
+                        CountryCodeLoc := VendorLoc."Country/Region Code";
+
+                    IF STRLEN(CountryCodeLoc) > 2 THEN
+                        ERROR(C_BLS0011, VendorLoc.TABLECAPTION, VendorLoc."No.");
+
+                    CountryLoc.GET(CountryCodeLoc);
+
+                    //Check Vendor Bank
+                    IF VendorBankLoc."Bank Account No." = '' THEN BEGIN
+                        VendorBankLoc.TESTFIELD(IBAN);
+                        VendorBankLoc.TESTFIELD("SWIFT Code");
+                        CompanyInfo.CheckIBAN(VendorBankLoc.IBAN);
+                        PaymentToForeignCountryLoc := TRUE;
+                    END ELSE BEGIN
+                        VendorBankLoc.TESTFIELD("Bank Account No.");
+                        // +301
+                        //VendorBankLoc.TESTFIELD("Bank Branch No.");
+                        // -301
+                        PaymentToForeignCountryLoc := FALSE;
+                    END;
+
+                    // +305
+                END;
+
+                IF InhouseLine."Account Type" = InhouseLine."Account Type"::Customer THEN BEGIN
+                    CustomerLoc.GET("Account No.");
+                    CustomerBankLoc.RESET;
+                    CustomerBankLoc.SETRANGE("Customer No.", CustomerLoc."No.");
+                    CustomerBankLoc.SETRANGE("Inhouse Bank", TRUE);
+                    IF NOT CustomerBankLoc.FIND('-') THEN
+                        ERROR(
+                          C_BLS0004, CustomerBankLoc.TABLECAPTION, CustomerBankLoc.FIELDCAPTION("Inhouse Bank"), TRUE,
+                          CustomerLoc.TABLECAPTION, CustomerLoc."No.");
+
+                    //Check Customer
+                    IF CustomerLoc."Country/Region Code" = '' THEN
+                        CountryCodeLoc := CompanyInfo."Country/Region Code"
+                    ELSE
+                        CountryCodeLoc := CustomerLoc."Country/Region Code";
+
+                    IF STRLEN(CountryCodeLoc) > 2 THEN
+                        ERROR(C_BLS0011, CustomerLoc.TABLECAPTION, CustomerLoc."No.");
+
+                    CountryLoc.GET(CountryCodeLoc);
+
+                    //Check Customer Bank
+                    IF CustomerBankLoc."Bank Account No." = '' THEN BEGIN
+                        CustomerBankLoc.TESTFIELD(IBAN);
+                        CustomerBankLoc.TESTFIELD("SWIFT Code");
+                        CompanyInfo.CheckIBAN(CustomerBankLoc.IBAN);
+                        PaymentToForeignCountryLoc := TRUE;
+                    END ELSE BEGIN
+                        CustomerBankLoc.TESTFIELD("Bank Account No.");
+                        //CustomerBankLoc.TESTFIELD("Bank Branch No.");
+                        PaymentToForeignCountryLoc := FALSE;
+                    END;
+                END;
+                // -305
+
+                IF "Currency Code" = '' THEN
+                    CurrCodeLoc := GLSetup."LCY Code"
+                ELSE
+                    CurrCodeLoc := "Currency Code";
+
+                // +002
+                IF OldCurrency <> '' THEN
+                    IF OldCurrency <> CurrCodeLoc THEN
+                        ERROR(C_BLS0024);
+                OldCurrency := CurrCodeLoc;
+                // -002
+
+                // +002
+                //IF CurrCode <> 'EUR' THEN
+                //  ERROR(C_BLS0006);
+
+
+                //Only Currency 'EUR' allowed
+                //IF (Amount > 50000) AND PaymentToForeignCountry THEN
+                //  ERROR(C_BLS0007,C_BLS0008,"Line No.");
+                // -002
+
+                // +305
+                IF InhouseLine."Account Type" = InhouseLine."Account Type"::Vendor THEN BEGIN
+                    // -305
+                    DirCodeLoc := VendorLoc.ZBADirectionCode;
+                    // +305
+                END;
+                IF InhouseLine."Account Type" = InhouseLine."Account Type"::Customer THEN BEGIN
+                    //DirCodeLoc := CustomerLoc."Direction Code";
+                    DirCodeLoc := '';
+                END;
+                // -305
+
+                IF (DirCodeLoc <> '12') AND
+                  (DirCodeLoc <> '20') THEN
+                    // +301
+                    //Vendor.FIELDERROR("Direction Code");
+                    DirCodeLoc := '';
+                // -301
+
+                //Export Data
+                // +307
+                BankBranchNo := DeleteCharNoNumber(InhouseBank."Bank Branch No.");
+                //FillField(1,10,InhouseBank."Bank Branch No.");
+                FillField(1, 10, BankBranchNo);
+                // -307
+                FillField(2, 10, InhouseBank."Bank Account No.");
+                FillField(3, 2, InhouseBank."Country/Region Code");
+                FillField(4, 35, CompanyInfo.Name);
+                FillField(5, 35, CompanyInfo."Name 2");
+                FillField(6, 35, CompanyInfo.Address);
+                FillField(7, 35, CompanyInfo.City);
+                FillField(8, 8, FORMAT("Posting Date", 8, '<Year4><Month,2><Day,2>'));
+                IF (ExecutionDate - "Posting Date" < 0) OR
+                  (ExecutionDate - "Posting Date" > 15) THEN
+                    ERROR(C_BLS0003);
+                FillField(9, 8, FORMAT(ExecutionDate, 8, '<Year4><Month,2><Day,2>'));
+                FillField(10, 20, FileNo);
+
+                // +305
+                IF InhouseLine."Account Type" = InhouseLine."Account Type"::Vendor THEN BEGIN
+                    // -305
+                    FillField(11, 11, VendorBankLoc."SWIFT Code");
+                    // +307
+                    BankBranchNo := DeleteCharNoNumber(VendorBankLoc."Bank Branch No.");
+                    //FillField(12,8,VendorBankLoc."Bank Branch No.");
+                    FillField(12, 8, BankBranchNo);
+                    // -307
+                    FillField(13, 2, VendorBankLoc."Country/Region Code");
+
+                    IF VendorBankLoc.Name <> '' THEN
+                        FillField(14, 35, VendorBankLoc.Name)
+                    ELSE
+                        FillField(14, 35, C_BLS0009);
+
+                    IF VendorBankLoc."Name 2" <> '' THEN
+                        FillField(15, 35, VendorBankLoc."Name 2")
+                    ELSE
+                        FillField(14, 35, C_BLS0009);
+
+                    IF VendorBankLoc.Address <> '' THEN
+                        FillField(16, 35, VendorBankLoc.Address)
+                    ELSE
+                        FillField(14, 35, C_BLS0009);
+
+                    IF VendorBankLoc.City <> '' THEN
+                        FillField(17, 35, VendorBankLoc.City)
+                    ELSE
+                        FillField(14, 35, C_BLS0009);
+
+                    FillField(18, 2, VendorLoc."Country/Region Code");
+                    FillField(19, 35, VendorLoc.Name);
+                    FillField(20, 35, VendorLoc."Name 2");
+                    FillField(21, 35, VendorLoc.Address);
+                    FillField(22, 35, VendorLoc.City);
+                    FillField(23, 35, VendorBankLoc."Bank Account No.");
+                    FillField(24, 35, VendorBankLoc.IBAN);
+                    // +305
+                END;
+
+                IF InhouseLine."Account Type" = InhouseLine."Account Type"::Customer THEN BEGIN
+                    FillField(11, 11, CustomerBankLoc."SWIFT Code");
+                    // +307
+                    BankBranchNo := DeleteCharNoNumber(CustomerBankLoc."Bank Branch No.");
+                    //FillField(12,8,CustomerBankLoc."Bank Branch No.");
+                    FillField(12, 8, BankBranchNo);
+                    // -307
+                    FillField(13, 2, CustomerBankLoc."Country/Region Code");
+
+                    IF CustomerBankLoc.Name <> '' THEN
+                        FillField(14, 35, CustomerBankLoc.Name)
+                    ELSE
+                        FillField(14, 35, C_BLS0009);
+
+                    IF CustomerBankLoc."Name 2" <> '' THEN
+                        FillField(15, 35, CustomerBankLoc."Name 2")
+                    ELSE
+                        FillField(14, 35, C_BLS0009);
+
+                    IF CustomerBankLoc.Address <> '' THEN
+                        FillField(16, 35, CustomerBankLoc.Address)
+                    ELSE
+                        FillField(14, 35, C_BLS0009);
+
+                    IF CustomerBankLoc.City <> '' THEN
+                        FillField(17, 35, CustomerBankLoc.City)
+                    ELSE
+                        FillField(14, 35, C_BLS0009);
+
+                    FillField(18, 2, CustomerLoc."Country/Region Code");
+                    FillField(19, 35, CustomerLoc.Name);
+                    FillField(20, 35, CustomerLoc."Name 2");
+                    FillField(21, 35, CustomerLoc.Address);
+                    FillField(22, 35, CustomerLoc.City);
+                    FillField(23, 35, CustomerBankLoc."Bank Account No.");
+                    FillField(24, 35, CustomerBankLoc.IBAN);
+                END;
+                // -305
+
+                FillField(25, 3, CurrCodeLoc);
+                FillField(26, 14, FORMAT(VendorCustomerAmount, 0, '<Sign><Integer>'));
+                // +004
+                TestStrLoc := '';
+                TestStrLoc := DELCHR(FORMAT(VendorCustomerAmount, 0, '<Decimals>'), '=', '.,');
+                IF TestStrLoc = '' THEN BEGIN
+                    TestStrLoc := '00';
+                END;
+                CASE STRLEN(TestStrLoc) OF
+                    0:
+                        TestStrLoc := TestStrLoc + '00';
+                    1:
+                        TestStrLoc := TestStrLoc + '0';
+                END;
+
+
+                //fillField(27,3,DELCHR(FORMAT(VendorCustomerAmount,0,'<Decimals>'),'=','.,'));
+                FillField(27, 3, TestStrLoc);
+                // -004
+                FillField(28, 27, CompanyInfo.Name);
+                FillField(29, 49, LineDescrLoc);
+                FillField(30, 5, '');
+                FillField(31, 2, DirCodeLoc);
+                FillField(32, 2, '');
+                TotalAmount := VendorCustomerAmount + TotalAmount;
+
+                //Change Journal Line
+
+                WriteLine;
+                CreateInhouseLedgerEntry(InhouseLine);
+
+                VendorCustomerAmount := 0;
+
+                // +003
+                GenJnlLine2 := InhouseLine;
+                // -003
+            end;
+
+            trigger OnPostDataItem()
+            var
+                BankLineNo: Integer;
+            begin
+                RESET;
+                // +002
+                // Create last line
+                // -002
+                SETCURRENTKEY("Journal Template Name", "Journal Batch Name", "Line No.");
+                SETRANGE("Journal Template Name", Template);
+                SETRANGE("Journal Batch Name", Batch);
+                IF FIND('+') THEN
+                    BankLineNo := "Line No.";
+                BankLineNo := "Line No." + 10000;
+
+                INIT;
+                "Journal Template Name" := Template;
+                "Journal Batch Name" := Batch;
+                "Line No." := BankLineNo;
+
+                // +002
+                //VALIDATE(Amount,TotalAmount);
+                //VALIDATE("Bal. Account Type",InhouseLine."Bal. Account Type"::"Bank Account");
+                //VALIDATE("Bal. Account No.",InhouseBank."No.");
+                VALIDATE("Posting Date", PostingDate);
+
+                // +303
+                VALIDATE("Currency Code", GenJnlLine2."Currency Code");
+                // -303
+
+                VALIDATE(Amount, -TotalAmount);
+                VALIDATE("Account Type", InhouseLine."Bal. Account Type"::"Bank Account");
+                VALIDATE("Account No.", InhouseBank."No.");
+
+                // +302
+                VALIDATE("Bank Payment Type", InhouseLine."Bank Payment Type"::"Inhouse Bank");
+                // -302
+
+                //VALIDATE("Posting Date",GenJnlLine2."Posting Date");
+                // -002
+                VALIDATE("Inhouse File created", TRUE);
+                // +305
+                //VALIDATE("Document Type","Document Type"::Payment);
+                // +306
+                //VALIDATE("Document Type","Document Type"::Refund);
+                // -306
+                // -305
+                VALIDATE("Document No.", FileNo);
+                // +003
+                "Source Code" := GenJnlLine2."Source Code";
+                "Reason Code" := GenJnlLine2."Reason Code";
+                // -003
+
+                // +306
+                VALIDATE("Document Type", GenJnlLine2."Document Type");
+                // -306
+
+                INSERT(TRUE);
+
+                CreateInhouseFileLine();
+
+                MESSAGE(C_BLS0023, FileNo);
+            end;
+
+            trigger OnPreDataItem()
+            var
+                genJnlPostLoc: Codeunit "Gen. Jnl.-Post";
+            begin
+                //Filter
+                SETRANGE("Journal Template Name", Template);
+                SETRANGE("Journal Batch Name", Batch);
+
+                CompanyInfo.GET();
+                GLSetup.GET();
+
+                //Inhouse Ledger Entries
+                // +002
+                //PaymentLedgerEntry.LOCKTABLE(TRUE,TRUE);
+                PaymentLedgerEntry.LOCKTABLE;
+                // -002
+                IF NOT PaymentLedgerEntry.FIND('+') THEN
+                    NextEntryNo := 1
+                ELSE
+                    NextEntryNo := PaymentLedgerEntry."Entry No." + 1;
+
+                IF (Template = '') OR (Batch = '') THEN
+                    ERROR(C_BLS0010);
+            end;
+        }
+    }
+
+    requestpage
+    {
+
+        layout
+        {
+            area(content)
+            {
+                group(Options)
+                {
+                    Caption = 'Options';
+                    field(Filename; Filename)
+                    {
+                        Caption = 'Filename';
+                        Editable = false;
+                        ApplicationArea = All;
+                    }
+                    field(ExecutionDate; ExecutionDate)
+                    {
+                        Caption = 'Execution Date';
+                        ApplicationArea = All;
+                    }
+                }
+            }
+        }
+
+        actions
+        {
+        }
+
+        trigger OnOpenPage()
+        begin
+            FileNo := NoSeriesMgmt.GetNextNo(PaymentSetup."File No.", TODAY, FALSE);
+            Filename := PaymentSetup."Export Path" +
+            STRSUBSTNO(PaymentSetup."Inhouse Bank Filename", FileNo);
+
+            ExecutionDate := TODAY + 5;
+        end;
+    }
+
+    labels
+    {
+    }
+
+    trigger OnInitReport()
+    begin
+        PaymentSetup.GET;
+        PaymentSetup.TESTFIELD("Export Path");
+        PaymentSetup.TESTFIELD("Inhouse Bank Filename");
+        PaymentSetup.TESTFIELD("File No.");
+    end;
+
+    trigger OnPostReport()
+    var
+        File: File;
+    begin
+        //OutputFile.CLOSE;
+        // +300
+        TempBlob.CreateInStream(Instream);
+        DownloadFromStream(Instream, '', '', '', Filename)
+        //FileMgt.DownloadTempFile(TempFileName);//ZFCU1.0
+        //ERASE(TempFileName);
+        // -300 
+    end;
+
+    trigger OnPreReport()
+    begin
+        CreateFile;
+    end;
+
+    var
+        C_BLS0001: Label 'File %1 already exists.';
+        C_BLS0002: Label '%2 not found in Line %1.';
+        C_BLS0003: Label 'Execution Date must be between Posting Date and 15 Days later.';
+        C_BLS0004: Label 'No %1 found with %2 = %3 for %4 %5.';
+        C_BLS0009: Label 'UNKNOWN';
+        C_BLS0010: Label 'This Report can only be called from a Payment Journal.';
+        C_BLS0011: Label 'Country Code for %1 %2 to long. Please use international ISO-Country Code.';
+        CompanyInfo: Record "Company Information";
+        GenJnlLine2: Record "Gen. Journal Line";
+        GLSetup: Record "General Ledger Setup";
+        InhouseBank: Record "Bank Account";
+        PaymentSetup: Record ZBAPaymentSetup;
+        PaymentLedgerEntry: Record ZBAPaymentLedgerEntry;
+        NoSeriesMgmt: Codeunit NoSeriesManagement;
+        OutputFile: File;
+        FileNo: Code[20];
+        Filename: Text[250];
+        TextArray: array[32] of Text[50];
+        NextEntryNo: Integer;
+        Template: Code[20];
+        Batch: Code[20];
+        ExecutionDate: Date;
+        PostingDate: Date;
+        TotalAmount: Decimal;
+        VendorCustomerAmount: Decimal;
+        AvisCreated: Boolean;
+        C_BLS0023: Label 'Inhouse File %1 Created.';
+        OldCurrency: Code[10];
+        C_BLS0024: Label 'Only one Currency can be processed for one file.';
+        PaymentLine: Record ZBAPaymentLine;
+        FileMgt: Codeunit "File Management";
+        TempFileName: Text;
+        CallFromCashReceiptJournal: Boolean;
+        BankBranchNo: Text;
+        WithAvis: Boolean;
+        Proposal: Code[54];
+        Outstream: OutStream;
+        TempBlob: Codeunit "Temp Blob";
+        Instream: InStream;
+
+    local procedure FillHeaderLine()
+    begin
+        TextArray[1] := 'EBBLZ';
+        TextArray[2] := 'EBKNR';
+        TextArray[3] := 'EBLND';
+        TextArray[4] := 'AGDA1';
+        TextArray[5] := 'AGDA2';
+        TextArray[6] := 'AGDA3';
+        TextArray[7] := 'AGDA4';
+        TextArray[8] := 'EDATU';
+        TextArray[9] := 'ADATU';
+        TextArray[10] := 'REFER';
+        TextArray[11] := 'BICSW';
+        TextArray[12] := 'BBBLZ';
+        TextArray[13] := 'BBLND';
+        TextArray[14] := 'ADBB1';
+        TextArray[15] := 'ADBB2';
+        TextArray[16] := 'ADBB3';
+        TextArray[17] := 'ADBB4';
+        TextArray[18] := 'BLLND';
+        TextArray[19] := 'BBNA1';
+        TextArray[20] := 'BBNA2';
+        TextArray[21] := 'BBNA3';
+        TextArray[22] := 'BBNA4';
+        TextArray[23] := 'BBKNR';
+        TextArray[24] := 'BBIBA';
+        TextArray[25] := 'CURRE';
+        TextArray[26] := 'AMNT1';
+        TextArray[27] := 'AMNT2';
+        TextArray[28] := 'AGNAM';
+        TextArray[29] := 'VERWE';
+        TextArray[30] := 'TXKEY';
+        TextArray[31] := 'WEISS';
+        TextArray[32] := 'ZAHLA';
+
+        WriteLine;
+    end;
+
+    local procedure WriteLine()
+    var
+        i: Integer;
+        CRLF: Text;
+    begin
+        FOR i := 1 TO ARRAYLEN(TextArray) DO BEGIN
+            CRLF := COPYSTR(TextArray[i], 1, STRLEN(TextArray[i])) + ';';
+            //OutputFile.SEEK(OutputFile.POS - 1);
+            Outstream.WriteText(CRLF);
+        END;
+        CRLF[1] := 13;
+        CRLF[2] := 10;
+        //B2Bupg
+        //TempBlob.CreateOutStream(Outstream);
+        //Outstream.WriteText(CRLF);
+        Outstream.WriteText();
+        //OutputFile.WRITE(CRLF);
+        //  OutputFile.SEEK(OutputFile.POS - 1);
+        CLEAR(TextArray);
+    end;
+
+    local procedure CreateFile()
+    begin
+        FileNo := NoSeriesMgmt.GetNextNo(PaymentSetup."File No.", TODAY, TRUE);
+        Filename := STRSUBSTNO(PaymentSetup."Inhouse Bank Filename", FileNo) + '.csv';
+        /*  IF EXISTS(Filename) THEN
+             ERROR(C_BLS0001, Filename); */
+        // +300
+        TempBlob.CreateOutStream(Outstream);
+        //Outstream.WriteText(Filename);
+        //OutputFile.CREATE(Filename);
+        /* TempFileName := FileMgt.ServerTempFileName('txt');
+        OutputFile.CREATE(TempFileName); */
+        // -300
+        FillHeaderLine;
+    end;
+
+    local procedure FillField(Pos: Integer; MaxLen: Integer; TextPar: Text[50])
+    begin
+        TextPar := CONVERTSTR(TextPar, ';', '_');
+        IF TextPar <> '' THEN
+            TextArray[Pos] := COPYSTR(TextPar, 1, MaxLen);
+    end;
+
+    local procedure CreateInhouseLedgerEntry(GenJrnlLine: Record "Gen. Journal Line")
+    begin
+        WITH GenJrnlLine DO BEGIN
+            PaymentLedgerEntry.INIT;
+            PaymentLedgerEntry."Entry No." := NextEntryNo;
+            PaymentLedgerEntry."Bank Account No." := InhouseBank."No.";
+            PaymentLedgerEntry."Bank Account Ledger Entry No." := 0;
+            PaymentLedgerEntry."Posting Date" := "Posting Date";
+            PaymentLedgerEntry."Document Type" := PaymentLedgerEntry."Document Type"::Payment;
+            PaymentLedgerEntry."Document No." := FileNo;
+            PaymentLedgerEntry.Description := Description;
+            // +002
+            PaymentLedgerEntry."Currency Code" := "Currency Code";
+            // -002
+            PaymentLedgerEntry.Amount := VendorCustomerAmount;
+            PaymentLedgerEntry."Execution Date" := ExecutionDate;
+            PaymentLedgerEntry."Entry Status" := PaymentLedgerEntry."Entry Status"::Created;
+            // +304
+            // PaymentLedgerEntry."Bal. Account Type" := PaymentLedgerEntry."Bal. Account Type"::"Bank Account";
+            // PaymentLedgerEntry."Bal. Account No." := "Account No.";
+            PaymentLedgerEntry."Bal. Account Type" := "Bal. Account Type".AsInteger();
+            PaymentLedgerEntry."Bal. Account No." := "Bal. Account No.";
+            PaymentLedgerEntry."Account Type" := "Account Type".AsInteger();
+            PaymentLedgerEntry."Account No." := "Account No.";
+            // -304
+            PaymentLedgerEntry.Open := TRUE;
+            PaymentLedgerEntry."Statement Status" := PaymentLedgerEntry."Statement Status"::Open;
+            PaymentLedgerEntry."Statement No." := '';
+            PaymentLedgerEntry."Statement Line No." := 0;
+            PaymentLedgerEntry."User ID" := USERID;
+            PaymentLedgerEntry."External Document No." := '';
+            PaymentLedgerEntry."With Avis" := AvisCreated;
+            PaymentLedgerEntry.INSERT;
+            NextEntryNo += 1;
+        END;
+    end;
+
+
+    procedure SetTemplBatch(GenJrnlLinePar: Record "Gen. Journal Line")
+    begin
+        Template := GenJrnlLinePar."Journal Template Name";
+        Batch := GenJrnlLinePar."Journal Batch Name";
+    end;
+
+
+    procedure CreatePaymentline(var JrnlLine: Record "Gen. Journal Line")
+    var
+        VendLedgEntryLoc: Record "Vendor Ledger Entry";
+        CustLedgEntryLoc: Record "Cust. Ledger Entry";
+        EntryNoLoc: Integer;
+    begin
+        // +002
+        JrnlLine."Document No." := FileNo;
+        JrnlLine."Bal. Account No." := '';
+        // +309
+        CASE TRUE OF
+            (JrnlLine."Account No." <> '') AND (JrnlLine."Bal. Account No." <> ''):
+                JrnlLine."Balance (LCY)" := 0;
+            JrnlLine."Bal. Account No." <> '':
+                JrnlLine."Balance (LCY)" := -JrnlLine."Amount (LCY)";
+            ELSE
+                JrnlLine."Balance (LCY)" := JrnlLine."Amount (LCY)";
+        END;
+        // -309
+        JrnlLine."Inhouse File created" := TRUE;
+        JrnlLine.MODIFY;
+        // -002
+
+        // +308
+        //IF NOT PaymentSetup."With Avis" THEN
+        IF NOT WithAvis THEN
+            // -308
+            EXIT;
+
+        // +002
+        PaymentLine.RESET;
+        PaymentLine.SETRANGE("Payment No.", FileNo);
+        // -002
+
+        PaymentSetup.TESTFIELD("No. of Entries");
+        // +002
+        //IF PaymentLine.FIND('+') THEN
+        IF PaymentLine.FINDLAST THEN
+            // -002
+            EntryNoLoc := PaymentLine."Entry No." + 1
+        ELSE
+            EntryNoLoc := 1;
+
+        PaymentLine.INIT;
+        PaymentLine."Payment No." := FileNo;
+        PaymentLine."Entry No." := EntryNoLoc;
+        PaymentLine."Line No." := JrnlLine."Line No.";
+        PaymentLine."Account Type" := JrnlLine."Account Type";
+        PaymentLine."Account No." := JrnlLine."Account No.";
+        PaymentLine."Posting Date" := JrnlLine."Posting Date";
+        PaymentLine."Document Type" := JrnlLine."Document Type";
+        PaymentLine."Document No." := FileNo;
+        PaymentLine."Currency Code" := JrnlLine."Currency Code";
+        PaymentLine.Amount := JrnlLine.Amount;
+        PaymentLine."Amount (LCY)" := JrnlLine."Amount (LCY)";
+        PaymentLine."Currency Factor" := JrnlLine."Currency Factor";
+        PaymentLine."Applies-to Doc. Type" := JrnlLine."Applies-to Doc. Type";
+        PaymentLine."Applies-to Doc. No." := JrnlLine."Applies-to Doc. No.";
+        PaymentLine."Due Date" := JrnlLine."Due Date";
+        PaymentLine."Pmt. Discount Date" := JrnlLine."Pmt. Discount Date";
+        PaymentLine."Payment Discount %" := JrnlLine."Payment Discount %";
+
+        // +305
+        IF InhouseLine."Account Type" = InhouseLine."Account Type"::Vendor THEN BEGIN
+            // -305
+            VendLedgEntryLoc.RESET;
+            VendLedgEntryLoc.SETCURRENTKEY("External Document No.", "Document Type", "Vendor No.");
+            VendLedgEntryLoc.SETRANGE("External Document No.", JrnlLine."External Document No.");
+            VendLedgEntryLoc.SETRANGE("Document Type", JrnlLine."Applies-to Doc. Type");
+            VendLedgEntryLoc.SETRANGE("Vendor No.", JrnlLine."Account No.");
+            IF VendLedgEntryLoc.FIND('-') THEN
+                PaymentLine."Document Date" := VendLedgEntryLoc."Document Date"
+            ELSE
+                PaymentLine."Document Date" := JrnlLine."Due Date";
+            // +305
+        END;
+        IF InhouseLine."Account Type" = InhouseLine."Account Type"::Customer THEN BEGIN
+            // -305
+            CustLedgEntryLoc.RESET;
+            CustLedgEntryLoc.SETCURRENTKEY("Document Type", "External Document No.", "Customer No.");
+            CustLedgEntryLoc.SETRANGE("External Document No.", JrnlLine."External Document No.");
+            CustLedgEntryLoc.SETRANGE("Document Type", JrnlLine."Applies-to Doc. Type");
+            CustLedgEntryLoc.SETRANGE("Customer No.", JrnlLine."Account No.");
+            IF CustLedgEntryLoc.FINDFIRST THEN
+                PaymentLine."Document Date" := CustLedgEntryLoc."Document Date"
+            ELSE
+                PaymentLine."Document Date" := JrnlLine."Due Date";
+        END;
+        // -305
+
+        PaymentLine."External Document No." := JrnlLine."External Document No.";
+        PaymentLine."Source Type" := JrnlLine."Source Type";
+        PaymentLine.INSERT;
+
+        // +002
+        //JrnlLine."Document No." := FileNo;
+        //JrnlLine."Bal. Account No." := '';
+        //JrnlLine."Inhouse File created" := TRUE;
+        //JrnlLine.MODIFY;
+        // -002
+    end;
+
+
+    procedure CreateInhouseFileLine()
+    var
+        InhouseFileLoc: Record ZBAInhouseFile;
+    begin
+        IF NOT InhouseFileLoc.FIND('+') THEN;
+        InhouseFileLoc."Entry No." := InhouseFileLoc."Entry No." + 1;
+
+        // +305
+        IF CallFromCashReceiptJournal THEN BEGIN
+            InhouseFileLoc.Type := InhouseFileLoc.Type::"Cash Receipt Journal";
+        END ELSE BEGIN
+            InhouseFileLoc.Type := InhouseFileLoc.Type::"Payment Journal";
+        END;
+        // -305
+
+        InhouseFileLoc."File No." := FileNo;
+        InhouseFileLoc.Date := TODAY;
+        InhouseFileLoc."User ID" := USERID;
+        InhouseFileLoc.Status := InhouseFileLoc.Status::Created;
+        InhouseFileLoc.INSERT;
+    end;
+
+
+    procedure SetCallFromCashReceiptJournal(CallFromCashReceiptJournalPar: Boolean)
+    begin
+        // +305
+        CallFromCashReceiptJournal := CallFromCashReceiptJournalPar;
+        // +305
+    end;
+
+    local procedure DeleteCharNoNumber(InputPar: Text): Text
+    var
+        i: Integer;
+        TestStrLoc: Text[1];
+        IntLoc: Integer;
+        OutPut: Text;
+    begin
+        // Delete all Char --> No Numbers
+        // +307
+        OutPut := '';
+        IF InputPar = '' THEN
+            EXIT(OutPut);
+        FOR i := 1 TO STRLEN(InputPar) DO BEGIN
+            TestStrLoc := COPYSTR(InputPar, i, 1);
+            IF EVALUATE(IntLoc, TestStrLoc) THEN BEGIN
+                OutPut := OutPut + FORMAT(IntLoc);
+            END;
+        END;
+        EXIT(OutPut);
+        // -307
+    end;
+
+    local procedure GetWithAvisAndProposal(accountTypePar: Option "G/L Account",Customer,Vendor,"Bank Account","Fixed Asset","IC Partner"; accountNoPar: Code[20]; var withAvisVar: Boolean; var proposalVar: Code[54])
+    var
+        customerLoc: Record Customer;
+        vendorLoc: Record Vendor;
+    begin
+        // +308
+        withAvisVar := PaymentSetup."With Avis";
+        proposalVar := PaymentSetup."Vendor Proposal";
+
+        IF accountTypePar = accountTypePar::Customer THEN BEGIN
+            IF accountNoPar <> customerLoc."No." THEN BEGIN
+                customerLoc.GET(accountNoPar);
+            END;
+            WithAvis := customerLoc."With Avis";
+            IF customerLoc."Payment Proposal" <> '' THEN BEGIN
+                proposalVar := customerLoc."Payment Proposal";
+            END;
+        END;
+
+        IF accountTypePar = accountTypePar::Vendor THEN BEGIN
+            IF accountNoPar <> vendorLoc."No." THEN BEGIN
+                vendorLoc.GET(accountNoPar);
+            END;
+            WithAvis := vendorLoc."With Avis";
+            IF vendorLoc."Payment Proposal" <> '' THEN BEGIN
+                proposalVar := vendorLoc."Payment Proposal";
+            END;
+        END;
+
+        // -308
+    end;
+}
