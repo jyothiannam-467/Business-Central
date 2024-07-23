@@ -1,0 +1,7 @@
+Wherever Custom Calendar Change variable in any function.
+There first we need to set source for that variable
+Structure has been changed in BC , when launched new list data type
+----------------------------------------Ex----------------------------------------------------------------------------------------
+Var CustomCalendarChange1: array[2] of Record "Customized Calendar Change";
+ CustomCalendarChange1[1].SetSource(CalChange."Source Type"::"Shipping Agent", "Shipping Agent Code", "Shipping Agent Service Code", '');
+CustomCalendarChange1[2].SetSource(CalChange."Source Type"::Location, "Location Code", '', '');
