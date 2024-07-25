@@ -81,3 +81,31 @@ report 50100 "Import From Excel"
         ImportTxt: Label 'Import Excel File';
         FilterTxt: Label '*.xlsx;*.xls;*.*', Locked = true;
 }
+
+
+
+
+----------------------------------------------------------------------------------------------------------------------------------
+
+codeunit 50104 CargaDatos
+{
+trigger OnRun()
+
+begin
+UploadIntoStream('Carga Fichero', 'C:\Users\achec\OneDrive\Publico', 'Archivos Excel (.xlsx)|.xlsx', NombreFicheroLocal, FicheroInStream);
+Nombrehoja := ExcelBuf.SelectSheetsNameStream(FicheroInStream);
+ExcelBuf.LOCKTABLE;
+ExcelBuf.OpenBookStream(FicheroInStream, '');
+ExcelBuf.ReadSheet();
+celdasleidas := excelbuf.Count;
+Message('Celdas leidas %1', format(celdasleidas));
+end;
+
+var
+ExcelBuf: Record "Excel Buffer";
+FicheroInStream: InStream;
+ServerFileName: Text;
+NombreHoja: Text;
+NombreFicheroLocal: Text;
+celdasleidas: Integer;
+}
