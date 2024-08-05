@@ -1,0 +1,626 @@
+report 50200 "Budget Vs Actual"
+{
+    UsageCategory = ReportsAndAnalysis;
+    ApplicationArea = All;
+    ProcessingOnly = true;
+
+    dataset
+    {
+    }
+
+    requestpage
+    {
+        AboutTitle = 'Teaching tip title';
+        AboutText = 'Teaching tip content';
+        layout
+        {
+            area(Content)
+            {
+                group(GroupName)
+                {
+                    field(FromDate; FromDate)
+                    {
+                        ApplicationArea = All;
+
+                    }
+                    field(ToDate; ToDate)
+                    {
+                        ApplicationArea = All;
+
+                    }
+                    field(BudgetCode; BudgetCode)
+                    {
+                        TableRelation = "G/L Budget Name".Name;
+                        ApplicationArea = All;
+
+                    }
+                }
+            }
+        }
+    }
+
+    trigger OnPreReport()
+    begin
+        if date2dmy(FromDate, 2) <= 3 then begin
+            FYFromDate := DMY2Date(1, 4, date2dmy(FromDate, 3) - 1);
+            FYToDate := DMY2Date(31, 3, date2dmy(FromDate, 3));
+        end else begin
+            FYFromDate := DMY2Date(1, 4, date2dmy(FromDate, 3));
+            FYToDate := DMY2Date(31, 3, date2dmy(FromDate, 3) + 1);
+        end;
+        PYFromDate := CalcDate('-1Y', FYFromDate);
+        PYToDate := CalcDate('-1D', FYFromDate);
+        PyDescrption := CopyStr(Format(date2dmy(PYFromDate, 3)), 3, 4) + '-' + CopyStr(Format(date2dmy(PYToDate, 3)), 3, 4);
+
+        FyDescrption := CopyStr(Format(date2dmy(FYFromDate, 3)), 3, 4) + '-' + CopyStr(Format(date2dmy(FYFromDate, 3) + 1), 3, 4);
+        ProcessData();
+        CreateSummary();
+        CreateSummaryDetails();
+        BudgetLocationWise();
+    end;
+
+    trigger OnPostReport()
+    begin
+        TempExcelBuffer.SetFriendlyFilename('Budget VS Actual');
+        TempExcelBuffer.CloseBook();
+        TempExcelBuffer.OpenExcel();
+    end;
+
+    var
+        TempExcelBuffer: Record "Excel Buffer" temporary;
+        BudgetVsActualBuffer: Record BudgetVSActualBuffer;
+        FromDate: Date;
+        ToDate: Date;
+        BudgetCode: code[20];
+        FYFromDate: Date;
+        FYToDate: Date;
+        PYFromDate: Date;
+        PYToDate: Date;
+        PyDescrption: Text;
+        FyDescrption: Text;
+
+    local procedure EnterCell(RowNo: Integer; ColumnNo: Integer; CellValue: Variant; Bold: Boolean; Italic: Boolean; UnderLine: Boolean; NumberFormat: Text[30]; cellTypeP: Option Number,Text,Date,Time)
+    begin
+        TempExcelBuffer.Init;
+        TempExcelBuffer.Validate("Row No.", RowNo);
+        TempExcelBuffer.Validate("Column No.", ColumnNo);
+        TempExcelBuffer."Cell Value as Text" := Format(CellValue);
+        TempExcelBuffer.Formula := '';
+        TempExcelBuffer.Bold := Bold;
+        TempExcelBuffer.Italic := Italic;
+        TempExcelBuffer.Underline := UnderLine;
+        TempExcelBuffer.NumberFormat := NumberFormat;
+        TempExcelBuffer."Cell Type" := cellTypeP;
+        TempExcelBuffer.Insert;
+    end;
+
+    local procedure ProcessData()
+    var
+        DimensionValue: Record "Dimension Value";
+        ColumnNo: Integer;
+        RowNo: Integer;
+        BudgetGroup: Record "Budget Group";
+        GLAccount: Record "G/L Account";
+        PYGLAccount: Record "G/L Account";
+        BudgetGLAccount: Record "G/L Account";
+        FYActualTotal: Dictionary of [Code[20], Decimal];
+        BudgetTotal: Dictionary of [Code[20], Decimal];
+        YTDActualTotal: Dictionary of [Code[20], Decimal];
+        YTDBudgetTotal: Dictionary of [Code[20], Decimal];
+        FYActual: Decimal;
+        Budget: Decimal;
+        YTDActual: Decimal;
+        YTDBudget: Decimal;
+    begin
+        BudgetVsActualBuffer.DeleteAll();
+        GLAccount.Reset();
+        GLAccount.SetFilter("Date Filter", '%1..%2', FromDate, ToDate);
+        GLAccount.SetFilter("Budget Filter", BudgetCode);
+        GLAccount.SetAutoCalcFields("Net Change", "Budgeted Amount");
+        PYGLAccount.Reset();
+        PYGLAccount.SetFilter("Date Filter", '%1..%2', PYFromDate, PYToDate);
+        PYGLAccount.SetAutoCalcFields("Net Change", "Budgeted Amount");
+        BudgetGLAccount.Reset();
+        BudgetGLAccount.SetFilter("Date Filter", '%1..%2', FYFromDate, FYToDate);
+        BudgetGLAccount.SetFilter("Budget Filter", BudgetCode);
+        BudgetGLAccount.SetAutoCalcFields("Net Change", "Budgeted Amount");
+        BudgetGroup.Reset();
+        BudgetGroup.SetCurrentKey(Piroty);
+        if BudgetGroup.FindSet() then
+            repeat
+                FYActual := 0;
+                Budget := 0;
+                YTDActual := 0;
+                YTDBudget := 0;
+                GLAccount.SetFilter("Budget Group Code", BudgetGroup."Budget Group Code");
+                DimensionValue.SetRange("Global Dimension No.", 1);
+                DimensionValue.SetRange("Dimension Value Type", DimensionValue."Dimension Value Type"::Standard);
+                if DimensionValue.FindSet then
+                    repeat
+                        FYActual := 0;
+                        Budget := 0;
+                        YTDActual := 0;
+                        YTDBudget := 0;
+                        GLAccount.SetFilter("Global Dimension 1 Filter", DimensionValue.Code);
+                        if GLAccount.FindSet() then
+                            repeat
+                                PYGLAccount.SetRange("No.", GLAccount."No.");
+                                PYGLAccount.SetFilter("Global Dimension 1 Filter", DimensionValue.Code);
+                                if PYGLAccount.FindFirst then;
+                                BudgetGLAccount.SetRange("No.", GLAccount."No.");
+                                BudgetGLAccount.SetFilter("Global Dimension 1 Filter", DimensionValue.Code);
+                                if BudgetGLAccount.FindFirst then;
+                                Clear(BudgetVsActualBuffer);
+                                BudgetVsActualBuffer.Init();
+                                BudgetVsActualBuffer.BudgetCode := BudgetGroup."Budget Group Code";
+                                BudgetVsActualBuffer."G/L Account No." := GLAccount."No.";
+                                BudgetVsActualBuffer."Global Dimension 1 Code" := dimensionvalue.Code;
+                                BudgetVsActualBuffer."Global Dimension 2 Code" := '';
+                                BudgetVsActualBuffer."PY Actual Amount" := PYGLAccount."Net Change";
+                                BudgetVsActualBuffer."FY Actual Amount" := BudgetGLAccount."Net Change";
+                                BudgetVsActualBuffer."FY Budget Amount" := BudgetGLAccount."Budgeted Amount";
+                                BudgetVsActualBuffer."YTD Actual Amount" := GLAccount."Net Change";
+                                BudgetVsActualBuffer."YTD Budget Amount" := GLAccount."Budgeted Amount";
+                                BudgetVsActualBuffer.Piroty := BudgetGroup.Piroty;
+                                BudgetVsActualBuffer.Insert();
+                            until GLAccount.Next() = 0;
+
+                    until DimensionValue.Next() = 0;
+            until BudgetGroup.Next() = 0;
+        SetColumnWidth();
+        TempExcelBuffer.CreateNewBook('Summary');
+        TempExcelBuffer.WriteSheet('Summary', CompanyName, UserId);
+    end;
+
+    local procedure CreateSummary()
+    var
+        DimensionValue: Record "Dimension Value";
+        BudgetGroup: Record "Budget Group";
+        lBudgetVsActualBuffer: Record BudgetVSActualBuffer;
+        ColumnNo: Integer;
+        RowNo: Integer;
+
+        FYActualTotal: Dictionary of [Code[20], Decimal];
+        BudgetTotal: Dictionary of [Code[20], Decimal];
+        YTDActualTotal: Dictionary of [Code[20], Decimal];
+        YTDBudgetTotal: Dictionary of [Code[20], Decimal];
+        FYActual: Decimal;
+        Budget: Decimal;
+        YTDActual: Decimal;
+        YTDBudget: Decimal;
+    begin
+        TempExcelBuffer.DeleteAll();
+        EnterCell(2, 2, StrSubstNo('Cost review for %1 month FY %2', Date2DMY(FromDate, 2) - Date2DMY(ToDate, 2) + 1, FyDescrption), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 2, 'Amount in Rs', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(4, 2, 'ACTIVITY', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 4, 'Total', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(4, 4, StrSubstNo('Actual FY %1', PyDescrption), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(5, 4, 'Provided', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 5, '', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(4, 5, StrSubstNo('Location Budget FY %1', FyDescrption), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(5, 5, 'Input', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 6, '', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(4, 6, StrSubstNo('Prorated Budget YTD %1', Format(ToDate, 0, '<Month Text,3> <Year>')), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(5, 6, 'Formula based', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 7, '', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(4, 7, StrSubstNo('Actual Spend YTD %1', Format(ToDate, 0, '<Month Text,3> <Year>')), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(5, 7, 'Input', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        ColumnNo := 8;
+        RowNo := 5;
+        DimensionValue.Reset();
+        DimensionValue.SetRange("Global Dimension No.", 1);
+        DimensionValue.SetRange("Dimension Value Type", DimensionValue."Dimension Value Type"::Standard);
+        if DimensionValue.FindSet then
+            repeat
+                EnterCell(3, ColumnNo, DimensionValue.Name, true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(4, ColumnNo, StrSubstNo('Actual FY %1', PyDescrption), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(5, ColumnNo, 'Provided', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(3, ColumnNo + 1, '', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(4, ColumnNo + 1, StrSubstNo('Location Budget FY %1', FyDescrption), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(5, ColumnNo + 1, 'Input', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(3, ColumnNo + 2, '', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(4, ColumnNo + 2, StrSubstNo('Prorated Budget YTD %1', Format(ToDate, 0, '<Month Text,3> <Year>')), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(5, ColumnNo + 2, 'Formula based', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(3, ColumnNo + 3, '', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(4, ColumnNo + 3, StrSubstNo('Actual Spend YTD %1', Format(ToDate, 0, '<Month Text,3> <Year>')), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(5, ColumnNo + 3, 'Input', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                ColumnNo += 4;
+            until DimensionValue.Next() = 0;
+
+        BudgetGroup.Reset();
+        BudgetGroup.SetCurrentKey(Piroty);
+        if BudgetGroup.FindSet() then
+            repeat
+                RowNo += 1;
+                FYActual := 0;
+                Budget := 0;
+                YTDActual := 0;
+                YTDBudget := 0;
+                lBudgetVsActualBuffer.SetRange("Global Dimension 1 Code");
+                lBudgetVsActualBuffer.SetRange(BudgetCode, BudgetGroup."Budget Group Code");
+                if lBudgetVsActualBuffer.FindSet() then begin
+                    lBudgetVsActualBuffer.CalcSums("FY Actual Amount", "FY Budget Amount", "YTD Actual Amount", "YTD Budget Amount", "PY Actual Amount");
+                    YTDActual := lBudgetVsActualBuffer."YTD Actual Amount";
+                    YTDBudget := lBudgetVsActualBuffer."YTD Budget Amount";
+                    FYActual := lBudgetVsActualBuffer."PY Actual Amount";
+                    Budget := lBudgetVsActualBuffer."FY Budget Amount";
+                end;
+
+                EnterCell(RowNo, 2, BudgetGroup."Budget Group Code", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(RowNo, 4, FYActual, false, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                EnterCell(RowNo, 5, Budget, false, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                EnterCell(RowNo, 6, YTDBudget, false, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                EnterCell(RowNo, 7, YTDActual, false, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                if not FYActualTotal.ContainsKey('TOTAL') then
+                    FYActualTotal.Add('TOTAL', FYActual)
+                else
+                    FYActualTotal.set('TOTAL', FYActual + FYActualTotal.Get('TOTAL'));
+                if not BudgetTotal.ContainsKey('TOTAL') then
+                    BudgetTotal.Add('TOTAL', Budget)
+                else
+                    BudgetTotal.set('TOTAL', Budget + BudgetTotal.Get('TOTAL'));
+                if Not YTDActualTotal.ContainsKey('TOTAL') then
+                    YTDActualTotal.Add('TOTAL', YTDActual)
+                else
+                    YTDActualTotal.set('TOTAL', YTDActual + YTDActualTotal.Get('TOTAL'));
+                if not YTDBudgetTotal.ContainsKey('TOTAL') then
+                    YTDBudgetTotal.Add('TOTAL', YTDBudget)
+                else
+                    YTDBudgetTotal.set('TOTAL', YTDBudget + YTDBudgetTotal.Get('TOTAL'));
+                ColumnNo := 8;
+                DimensionValue.SetRange("Global Dimension No.", 1);
+                DimensionValue.SetRange("Dimension Value Type", DimensionValue."Dimension Value Type"::Standard);
+                if DimensionValue.FindSet then
+                    repeat
+                        FYActual := 0;
+                        Budget := 0;
+                        YTDActual := 0;
+                        YTDBudget := 0;
+                        lBudgetVsActualBuffer.SetRange("Global Dimension 1 Code", dimensionvalue.Code);
+                        if lBudgetVsActualBuffer.FindSet() then begin
+                            lBudgetVsActualBuffer.CalcSums("FY Actual Amount", "FY Budget Amount", "YTD Actual Amount", "YTD Budget Amount", "PY Actual Amount");
+                            YTDActual := lBudgetVsActualBuffer."YTD Actual Amount";
+                            YTDBudget := lBudgetVsActualBuffer."YTD Budget Amount";
+                            FYActual := lBudgetVsActualBuffer."PY Actual Amount";
+                            Budget := lBudgetVsActualBuffer."FY Budget Amount";
+                        end;
+                        EnterCell(RowNo, ColumnNo, FYActual, false, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                        EnterCell(RowNo, ColumnNo + 1, Budget, false, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                        EnterCell(RowNo, ColumnNo + 2, YTDBudget, false, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                        EnterCell(RowNo, ColumnNo + 3, YTDActual, false, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                        if not FYActualTotal.ContainsKey(DimensionValue.Code) then
+                            FYActualTotal.Add(DimensionValue.Code, FYActual)
+                        else
+                            FYActualTotal.set(DimensionValue.Code, FYActual + FYActualTotal.Get(DimensionValue.Code));
+                        if not BudgetTotal.ContainsKey(DimensionValue.Code) then
+                            BudgetTotal.Add(DimensionValue.Code, Budget)
+                        else
+                            BudgetTotal.set(DimensionValue.Code, Budget + BudgetTotal.Get(DimensionValue.Code));
+                        if Not YTDActualTotal.ContainsKey(DimensionValue.Code) then
+                            YTDActualTotal.Add(DimensionValue.Code, YTDActual)
+                        else
+                            YTDActualTotal.set(DimensionValue.Code, YTDActual + YTDActualTotal.Get(DimensionValue.Code));
+                        if not YTDBudgetTotal.ContainsKey(DimensionValue.Code) then
+                            YTDBudgetTotal.Add(DimensionValue.Code, YTDBudget)
+                        else
+                            YTDBudgetTotal.set(DimensionValue.Code, YTDBudget + YTDBudgetTotal.Get(DimensionValue.Code));
+                        ColumnNo += 4;
+                    until DimensionValue.Next() = 0;
+            until BudgetGroup.Next() = 0;
+        SetColumnWidth();
+        TempExcelBuffer.CreateNewBook('Summary');
+        TempExcelBuffer.WriteSheet('Summary', CompanyName, UserId);
+    end;
+
+    local procedure CreateSummaryDetails()
+    var
+        DimensionValue: Record "Dimension Value";
+        BudgetGroup: Record "Budget Group";
+        lBudgetVsActualBuffer: Record BudgetVSActualBuffer;
+        GLAccount: record "G/L Account";
+        ColumnNo: Integer;
+        RowNo: Integer;
+
+        FYActualTotal: Dictionary of [Code[20], Decimal];
+        BudgetTotal: Dictionary of [Code[20], Decimal];
+        YTDActualTotal: Dictionary of [Code[20], Decimal];
+        YTDBudgetTotal: Dictionary of [Code[20], Decimal];
+        FYActual: Decimal;
+        Budget: Decimal;
+        YTDActual: Decimal;
+        YTDBudget: Decimal;
+    begin
+        TempExcelBuffer.DeleteAll();
+        EnterCell(2, 2, StrSubstNo('Cost review for %1 month FY %2', Date2DMY(ToDate, 2) - Date2DMY(FromDate, 2) + 1, FyDescrption), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 2, 'Amount in Rs', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(4, 2, 'ACTIVITY', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 4, 'Total', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(4, 4, StrSubstNo('Actual FY %1', PyDescrption), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(5, 4, 'Provided', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 5, '', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(4, 5, StrSubstNo('Location Budget FY %1', FyDescrption), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(5, 5, 'Input', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 6, '', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(4, 6, StrSubstNo('Prorated Budget YTD %1', Format(ToDate, 0, '<Month Text,3> <Year>')), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(5, 6, 'Formula based', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 7, '', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(4, 7, StrSubstNo('Actual Spend YTD %1', Format(ToDate, 0, '<Month Text,3> <Year>')), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(5, 7, 'Input', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 8, '', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(4, 8, 'Variance', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(5, 8, '%', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        ColumnNo := 9;
+        RowNo := 5;
+        DimensionValue.Reset();
+        DimensionValue.SetRange("Global Dimension No.", 1);
+        DimensionValue.SetRange("Dimension Value Type", DimensionValue."Dimension Value Type"::Standard);
+        if DimensionValue.FindSet then
+            repeat
+                EnterCell(3, ColumnNo, DimensionValue.Name, true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(4, ColumnNo, StrSubstNo('Actual FY %1', PyDescrption), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(5, ColumnNo, 'Provided', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(3, ColumnNo + 1, '', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(4, ColumnNo + 1, StrSubstNo('Location Budget FY %1', FyDescrption), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(5, ColumnNo + 1, 'Input', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(3, ColumnNo + 2, '', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(4, ColumnNo + 2, StrSubstNo('Prorated Budget YTD %1', Format(ToDate, 0, '<Month Text,3> <Year>')), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(5, ColumnNo + 2, 'Formula based', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(3, ColumnNo + 3, '', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(4, ColumnNo + 3, StrSubstNo('Actual Spend YTD %1', Format(ToDate, 0, '<Month Text,3> <Year>')), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(5, ColumnNo + 3, 'Input', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(3, ColumnNo + 4, '', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(4, ColumnNo + 4, 'Variance', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(5, ColumnNo + 4, '%', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                ColumnNo += 5;
+            until DimensionValue.Next() = 0;
+
+        BudgetGroup.Reset();
+        BudgetGroup.SetCurrentKey(Piroty);
+        if BudgetGroup.FindSet() then
+            repeat
+                RowNo += 1;
+                FYActual := 0;
+                Budget := 0;
+                YTDActual := 0;
+                YTDBudget := 0;
+                lBudgetVsActualBuffer.reset;
+                lBudgetVsActualBuffer.SetRange(BudgetCode, BudgetGroup."Budget Group Code");
+                if lBudgetVsActualBuffer.FindSet() then begin
+                    lBudgetVsActualBuffer.CalcSums("FY Actual Amount", "FY Budget Amount", "YTD Actual Amount", "YTD Budget Amount", "PY Actual Amount");
+                    YTDActual := lBudgetVsActualBuffer."YTD Actual Amount";
+                    YTDBudget := lBudgetVsActualBuffer."YTD Budget Amount";
+                    FYActual := lBudgetVsActualBuffer."PY Actual Amount";
+                    Budget := lBudgetVsActualBuffer."FY Budget Amount";
+                end;
+
+                EnterCell(RowNo, 2, BudgetGroup."Budget Group Code", true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(RowNo, 4, FYActual, true, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                EnterCell(RowNo, 5, Budget, true, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                EnterCell(RowNo, 6, YTDBudget, true, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                EnterCell(RowNo, 7, YTDActual, true, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                if YTDBudget <> 0 then
+                    EnterCell(RowNo, 8, Format(Round((YTDActual / YTDBudget) - 1, 1)) + '%', false, false, false, '', TempExcelBuffer."Cell Type"::Text)
+                else
+                    EnterCell(RowNo, 8, '0%', false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                ColumnNo := 9;
+                DimensionValue.SetRange("Global Dimension No.", 1);
+                DimensionValue.SetRange("Dimension Value Type", DimensionValue."Dimension Value Type"::Standard);
+                if DimensionValue.FindSet then
+                    repeat
+                        FYActual := 0;
+                        Budget := 0;
+                        YTDActual := 0;
+                        YTDBudget := 0;
+                        lBudgetVsActualBuffer.SetRange("Global Dimension 1 Code", dimensionvalue.Code);
+                        if lBudgetVsActualBuffer.FindSet() then begin
+                            lBudgetVsActualBuffer.CalcSums("FY Actual Amount", "FY Budget Amount", "YTD Actual Amount", "YTD Budget Amount", "PY Actual Amount");
+                            YTDActual := lBudgetVsActualBuffer."YTD Actual Amount";
+                            YTDBudget := lBudgetVsActualBuffer."YTD Budget Amount";
+                            FYActual := lBudgetVsActualBuffer."PY Actual Amount";
+                            Budget := lBudgetVsActualBuffer."FY Budget Amount";
+                        end;
+                        EnterCell(RowNo, ColumnNo, FYActual, true, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                        EnterCell(RowNo, ColumnNo + 1, Budget, true, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                        EnterCell(RowNo, ColumnNo + 2, YTDBudget, true, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                        EnterCell(RowNo, ColumnNo + 3, YTDActual, true, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                        if YTDBudget <> 0 then
+                            EnterCell(RowNo, ColumnNo + 4, Format(Round(((YTDActual / YTDBudget) - 1) * 100, 1)) + '%', false, false, false, '', TempExcelBuffer."Cell Type"::Text)
+                        else
+                            EnterCell(RowNo, ColumnNo + 4, '0%', false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                        if not FYActualTotal.ContainsKey(DimensionValue.Code) then
+                            FYActualTotal.Add(DimensionValue.Code, FYActual)
+                        else
+                            FYActualTotal.set(DimensionValue.Code, FYActual + FYActualTotal.Get(DimensionValue.Code));
+                        if not BudgetTotal.ContainsKey(DimensionValue.Code) then
+                            BudgetTotal.Add(DimensionValue.Code, Budget)
+                        else
+                            BudgetTotal.set(DimensionValue.Code, Budget + BudgetTotal.Get(DimensionValue.Code));
+                        if Not YTDActualTotal.ContainsKey(DimensionValue.Code) then
+                            YTDActualTotal.Add(DimensionValue.Code, YTDActual)
+                        else
+                            YTDActualTotal.set(DimensionValue.Code, YTDActual + YTDActualTotal.Get(DimensionValue.Code));
+                        if not YTDBudgetTotal.ContainsKey(DimensionValue.Code) then
+                            YTDBudgetTotal.Add(DimensionValue.Code, YTDBudget)
+                        else
+                            YTDBudgetTotal.set(DimensionValue.Code, YTDBudget + YTDBudgetTotal.Get(DimensionValue.Code));
+                        ColumnNo += 5;
+                    until DimensionValue.Next() = 0;
+                ColumnNo := 1;
+                GLAccount.SetRange("Budget Group Code", BudgetGroup."Budget Group Code");
+                if GLAccount.FindSet then
+                    repeat
+                        RowNo += 1;
+                        lBudgetVsActualBuffer.reset;
+                        lBudgetVsActualBuffer.SetRange("G/L Account No.", GLAccount."No.");
+                        if lBudgetVsActualBuffer.FindSet() then begin
+                            lBudgetVsActualBuffer.CalcSums("FY Actual Amount", "FY Budget Amount", "YTD Actual Amount", "YTD Budget Amount", "PY Actual Amount");
+                            YTDActual := lBudgetVsActualBuffer."YTD Actual Amount";
+                            YTDBudget := lBudgetVsActualBuffer."YTD Budget Amount";
+                            FYActual := lBudgetVsActualBuffer."PY Actual Amount";
+                            Budget := lBudgetVsActualBuffer."FY Budget Amount";
+                        end;
+                        EnterCell(RowNo, 1, GLAccount."No.", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                        EnterCell(RowNo, 2, GLAccount.Name, false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                        EnterCell(RowNo, 4, FYActual, false, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                        EnterCell(RowNo, 5, Budget, false, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                        EnterCell(RowNo, 6, YTDBudget, false, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                        EnterCell(RowNo, 7, YTDActual, false, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                        if YTDBudget <> 0 then
+                            EnterCell(RowNo, 8, Format(Round(((YTDActual / YTDBudget) - 1) * 100, 1)) + '%', false, false, false, '', TempExcelBuffer."Cell Type"::Text)
+                        else
+                            EnterCell(RowNo, 8, '0%', false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                        ColumnNo := 9;
+                        lBudgetVsActualBuffer.reset;
+                        lBudgetVsActualBuffer.SetCurrentKey(Piroty, BudgetCode, "G/L Account No.", "Global Dimension 1 Code", "Global Dimension 2 Code");
+                        lBudgetVsActualBuffer.SetRange("G/L Account No.", GLAccount."No.");
+                        if lBudgetVsActualBuffer.FindSet() then
+                            repeat
+                                FYActual := 0;
+                                Budget := 0;
+                                YTDActual := 0;
+                                YTDBudget := 0;
+
+                                YTDActual := lBudgetVsActualBuffer."YTD Actual Amount";
+                                YTDBudget := lBudgetVsActualBuffer."YTD Budget Amount";
+                                FYActual := lBudgetVsActualBuffer."PY Actual Amount";
+                                Budget := lBudgetVsActualBuffer."FY Budget Amount";
+                                EnterCell(RowNo, ColumnNo, FYActual, false, false, false, '', TempExcelBuffer."Cell Type"::Number);
+                                EnterCell(RowNo, ColumnNo + 1, Budget, false, false, false, '', TempExcelBuffer."Cell Type"::Number);
+                                EnterCell(RowNo, ColumnNo + 2, YTDBudget, false, false, false, '', TempExcelBuffer."Cell Type"::Number);
+                                EnterCell(RowNo, ColumnNo + 3, YTDActual, false, false, false, '', TempExcelBuffer."Cell Type"::Number);
+                                if YTDBudget <> 0 then
+                                    EnterCell(RowNo, ColumnNo + 4, Format(Round(((YTDActual / YTDBudget) - 1) * 100, 1)) + '%', false, false, false, '', TempExcelBuffer."Cell Type"::Text)
+                                else
+                                    EnterCell(RowNo, ColumnNo + 4, '0%', false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                                ColumnNo += 5;
+                            until lBudgetVsActualBuffer.Next() = 0;
+                    until GLAccount.Next() = 0;
+            until BudgetGroup.Next() = 0;
+        SetColumnWidth();
+        TempExcelBuffer.SelectOrAddSheet('Summary with details');
+        TempExcelBuffer.WriteSheet('Summary with details', CompanyName, UserId);
+    end;
+
+    local procedure BudgetLocationWise()
+    var
+        DimensionValue: Record "Dimension Value";
+    begin
+        DimensionValue.Reset();
+        DimensionValue.SetRange("Global Dimension No.", 1);
+        DimensionValue.SetRange("Dimension Value Type", DimensionValue."Dimension Value Type"::Standard);
+        if DimensionValue.FindSet then
+            repeat
+                CreateSummaryDetailsLocationWise(dimensionvalue.Code, dimensionvalue.Name)
+            until DimensionValue.Next() = 0;
+    end;
+
+    local procedure CreateSummaryDetailsLocationWise(LocationCode: Code[20]; LocationName: Text)
+    var
+        DimensionValue: Record "Dimension Value";
+        BudgetGroup: Record "Budget Group";
+        lBudgetVsActualBuffer: Record BudgetVSActualBuffer;
+        GLAccount: record "G/L Account";
+        ColumnNo: Integer;
+        RowNo: Integer;
+
+        FYActualTotal: Dictionary of [Code[20], Decimal];
+        BudgetTotal: Dictionary of [Code[20], Decimal];
+        YTDActualTotal: Dictionary of [Code[20], Decimal];
+        YTDBudgetTotal: Dictionary of [Code[20], Decimal];
+        FYActual: Decimal;
+        Budget: Decimal;
+        YTDActual: Decimal;
+        YTDBudget: Decimal;
+    begin
+        TempExcelBuffer.DeleteAll();
+        EnterCell(2, 2, StrSubstNo('Cost review for %1 month FY %2', Date2DMY(ToDate, 2) - Date2DMY(FromDate, 2) + 1, FyDescrption), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 2, 'Amount in Rs', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(4, 2, 'ACTIVITY', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 4, 'Total', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(4, 4, StrSubstNo('Actual FY %1', PyDescrption), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(5, 4, 'Provided', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 5, '', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(4, 5, StrSubstNo('Location Budget FY %1', FyDescrption), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(5, 5, 'Input', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 6, '', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(4, 6, StrSubstNo('Prorated Budget YTD %1', Format(ToDate, 0, '<Month Text,3> <Year>')), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(5, 6, 'Formula based', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 7, '', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(4, 7, StrSubstNo('Actual Spend YTD %1', Format(ToDate, 0, '<Month Text,3> <Year>')), true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(5, 7, 'Input', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 8, '', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(4, 8, 'Variance (-) overspend', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(5, 8, 'Formula based', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        RowNo := 5;
+        BudgetGroup.Reset();
+        BudgetGroup.SetCurrentKey(Piroty);
+        if BudgetGroup.FindSet() then
+            repeat
+                RowNo += 1;
+                FYActual := 0;
+                Budget := 0;
+                YTDActual := 0;
+                YTDBudget := 0;
+                lBudgetVsActualBuffer.reset;
+                lBudgetVsActualBuffer.SetRange(BudgetCode, BudgetGroup."Budget Group Code");
+                lBudgetVsActualBuffer.SetRange("Global Dimension 1 Code", LocationCode);
+                if lBudgetVsActualBuffer.FindSet() then begin
+                    lBudgetVsActualBuffer.CalcSums("FY Actual Amount", "FY Budget Amount", "YTD Actual Amount", "YTD Budget Amount", "PY Actual Amount");
+                    YTDActual := lBudgetVsActualBuffer."YTD Actual Amount";
+                    YTDBudget := lBudgetVsActualBuffer."YTD Budget Amount";
+                    FYActual := lBudgetVsActualBuffer."PY Actual Amount";
+                    Budget := lBudgetVsActualBuffer."FY Budget Amount";
+                end;
+
+                EnterCell(RowNo, 2, BudgetGroup."Budget Group Code", true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                EnterCell(RowNo, 4, FYActual, true, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                EnterCell(RowNo, 5, Budget, true, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                EnterCell(RowNo, 6, YTDBudget, true, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                EnterCell(RowNo, 7, YTDActual, true, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                EnterCell(RowNo, 8, YTDBudget - YTDActual, false, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                ColumnNo := 1;
+                GLAccount.SetRange("Budget Group Code", BudgetGroup."Budget Group Code");
+                if GLAccount.FindSet then
+                    repeat
+                        RowNo += 1;
+                        FYActual := 0;
+                        Budget := 0;
+                        YTDActual := 0;
+                        YTDBudget := 0;
+                        lBudgetVsActualBuffer.reset;
+                        lBudgetVsActualBuffer.SetRange("G/L Account No.", GLAccount."No.");
+                        lBudgetVsActualBuffer.SetRange("Global Dimension 1 Code", LocationCode);
+                        if lBudgetVsActualBuffer.FindSet() then begin
+                            lBudgetVsActualBuffer.CalcSums("FY Actual Amount", "FY Budget Amount", "YTD Actual Amount", "YTD Budget Amount", "PY Actual Amount");
+                            YTDActual := lBudgetVsActualBuffer."YTD Actual Amount";
+                            YTDBudget := lBudgetVsActualBuffer."YTD Budget Amount";
+                            FYActual := lBudgetVsActualBuffer."PY Actual Amount";
+                            Budget := lBudgetVsActualBuffer."FY Budget Amount";
+                        end;
+                        EnterCell(RowNo, 1, GLAccount."No.", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                        EnterCell(RowNo, 2, GLAccount.Name, false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                        EnterCell(RowNo, 4, FYActual, false, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                        EnterCell(RowNo, 5, Budget, false, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                        EnterCell(RowNo, 6, YTDBudget, false, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                        EnterCell(RowNo, 7, YTDActual, false, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                        EnterCell(RowNo, 8, YTDBudget - YTDActual, false, false, false, '#,0', TempExcelBuffer."Cell Type"::Number);
+                    until GLAccount.Next() = 0;
+            until BudgetGroup.Next() = 0;
+        SetColumnWidth();
+        TempExcelBuffer.SelectOrAddSheet(LocationName);
+        TempExcelBuffer.WriteSheet(LocationName, CompanyName, UserId);
+    end;
+
+    local procedure SetColumnWidth()
+    begin
+        TempExcelBuffer.SetRange("Row No.", 4);
+        if TempExcelBuffer.FindSet() then
+            repeat
+                if TempExcelBuffer.xlColID = 'B' then
+                    TempExcelBuffer.SetColumnWidth(TempExcelBuffer.xlColID, 50)
+                else
+                    TempExcelBuffer.SetColumnWidth(TempExcelBuffer.xlColID, StrLen(TempExcelBuffer."Cell Value as Text"));
+            until TempExcelBuffer.Next() = 0;
+        TempExcelBuffer.SetRange("Row No.");
+    end;
+}
