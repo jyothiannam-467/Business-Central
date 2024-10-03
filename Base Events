@@ -62,7 +62,7 @@
 
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-OnPostGLAccOnAfterInitGLEntry---After Posting GenJnlLines > GL Etries Will Hit
+OnPostGLAccOnAfterInitGLEntry---After Posting GenJnlLines > GL Etries Will Hit ----- Codeunit::"Gen. Jnl.-Post Line"
 
 ---------------------------------------------------------------------------------------------------------
 Item Journal Lines----Item Ledger Entries(Sales / Purchase)
