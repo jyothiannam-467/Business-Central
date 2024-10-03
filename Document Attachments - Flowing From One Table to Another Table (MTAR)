@@ -1,0 +1,37 @@
+ procedure TransferAttachmentsToDocumentAttachments()
+    var
+        AttachmentRec: Record Attachment; // Assuming you have a table called Attachment
+        DocAttachmentRec: Record "Document Attachment"; // Business Central standard table 1173
+        TempBlob: Codeunit "Temp Blob"; // Used for handling binary data
+        InStream: InStream;
+        OutStr: OutStream;
+    begin
+        // Filter and retrieve records from the Attachment table
+        if AttachmentRec.FindSet() then begin
+            repeat
+                // Initialize a new record for Document Attachment
+                DocAttachmentRec.Init();
+                //DocAttachmentRec."Document Type" := DocAttachmentRec."Document Type"::Order;
+                DocAttachmentRec."Table ID" := AttachmentRec."Table ID"; // Example: Attaching to Sales Header
+                DocAttachmentRec."No." := AttachmentRec."Document No"; // Replace with dynamic record link
+                DocAttachmentRec."File Name" := AttachmentRec."File Name";
+                DocAttachmentRec."File Extension" := AttachmentRec."File Extension";
+                DocAttachmentRec.ID := 0;
+                // Reading the binary data (BLOB) from the Attachment table
+                AttachmentRec.CalcFields("Attachment File");
+                if AttachmentRec."Attachment File".HasValue then begin
+                    AttachmentRec."Attachment File".CreateInStream(InStream);
+                    //TempBlob.CreateOutStream(OutStr);
+                    //CopyStream(OutStr, InStream);
+
+                    // Assign the BLOB from Attachment to Document Attachment
+                    DocAttachmentRec."Document Reference ID".ImportStream(InStream, AttachmentRec."File Name" + '.' + AttachmentRec."File Extension");
+                end;
+
+                // Insert the new Document Attachment record
+                DocAttachmentRec.Insert(true);
+            until AttachmentRec.Next() = 0;
+
+            Message('Done');
+        end;
+    end;
