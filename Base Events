@@ -116,3 +116,792 @@ Codeunit::"Item Jnl.-Post Line"---OnBeforeInsertItemLedgEntry
         end;
     end;
 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+BankAccReconciliationLinesToGeneralJournal
+______________________________________________
+
+codeunit 50122 EventHandler
+{
+    [EventSubscriber(ObjectType::Report, Report::"Trans. Bank Rec. to Gen. Jnl.", OnBeforeGenJnlLineInsert, '', false, false)]
+    local procedure "Trans. Bank Rec. to Gen. Jnl._OnBeforeGenJnlLineInsert"(var GenJournalLine: Record "Gen. Journal Line"; BankAccReconciliationLine: Record "Bank Acc. Reconciliation Line")
+    begin
+        GenJournalLine."ZY Test" := BankAccReconciliationLine."ZY Test";
+    end;
+}
+
+tableextension 50119 BankAccReconciliationLineExt extends "Bank Acc. Reconciliation Line"
+{
+    fields
+    {
+        field(50100; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+pageextension 50119 BankAccReconciliationLinesExt extends "Bank Acc. Reconciliation Lines"
+{
+    layout
+    {
+        addafter("Transaction Date")
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+}
+tableextension 50120 GenJournalLineExt extends "Gen. Journal Line"
+{
+    fields
+    {
+        field(50100; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50121 GeneralJournalExt extends "General Journal"
+{
+    layout
+    {
+        addafter("Document No.")
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+}
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ItemJournalsToItemLedgerEntries
+____________________________________________________
+codeunit 50122 EventHandler
+{
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Item Jnl.-Post Line", OnAfterInitItemLedgEntry, '', false, false)]
+    local procedure OnAfterInitItemLedgEntry(var NewItemLedgEntry: Record "Item Ledger Entry"; var ItemJournalLine: Record "Item Journal Line"; var ItemLedgEntryNo: Integer);
+    begin
+        NewItemLedgEntry."ZY Test" := ItemJournalLine."ZY Test";
+    end;
+}
+
+tableextension 50122 ItemJournalLineExt extends "Item Journal Line"
+{
+    fields
+    {
+        field(50000; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50122 ItemJournalExt extends "Item Journal"
+{
+    layout
+    {
+        addafter(Description)
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+}
+
+tableextension 50113 ItemLedgerEntryExt extends "Item Ledger Entry"
+{
+    fields
+    {
+        field(50000; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50113 ItemLedgerEntriesExt extends "Item Ledger Entries"
+{
+    layout
+    {
+        addafter("Document No.")
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+}
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+PaymentJournalToBankAccountLedgerEntries
+_______________________________________________________
+codeunit 50123 EventHandler
+{
+    [EventSubscriber(ObjectType::Table, Database::"Bank Account Ledger Entry", OnAfterCopyFromGenJnlLine, '', false, false)]
+    local procedure OnAfterCopyFromGenJnlLine(GenJournalLine: Record "Gen. Journal Line"; var BankAccountLedgerEntry: Record "Bank Account Ledger Entry");
+    begin
+        BankAccountLedgerEntry."ZY Test" := GenJournalLine."ZY Test";
+    end;
+}
+tableextension 50119 GenJournalLineExt extends "Gen. Journal Line"
+{
+    fields
+    {
+        field(50100; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+pageextension 50126 PaymentJournalExt extends "Payment Journal"
+{
+    layout
+    {
+        addafter("Document No.")
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+}
+tableextension 50121 BankAccountLedgerEntryExt extends "Bank Account Ledger Entry"
+{
+    fields
+    {
+        field(50100; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+pageextension 50121 BankAccountLedgerEntriesExt extends "Bank Account Ledger Entries"
+{
+    layout
+    {
+        addafter("Document No.")
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+}
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+PurchaseJournalToGeneralLedgerEntries
+____________________________________________________
+codeunit 50122 EventHandler
+{
+    [EventSubscriber(ObjectType::Table, Database::"G/L Entry", OnAfterCopyGLEntryFromGenJnlLine, '', false, false)]
+    local procedure OnAfterCopyGLEntryFromGenJnlLine(var GLEntry: Record "G/L Entry"; var GenJournalLine: Record "Gen. Journal Line");
+    begin
+        GLEntry."ZY Test" := GenJournalLine."ZY Test";
+    end;
+}
+
+tableextension 50119 GenJournalLineExt extends "Gen. Journal Line"
+{
+    fields
+    {
+        field(50100; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50119 PurchaseJournalExt extends "Purchase Journal"
+{
+    layout
+    {
+        addafter("Document No.")
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+
+        }
+    }
+}
+
+tableextension 50121 GLEntryExt extends "G/L Entry"
+{
+    fields
+    {
+        field(50100; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50121 GeneralLedgerEntriesExt extends "General Ledger Entries"
+{
+    layout
+    {
+        addafter("Document No.")
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+}
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+PurchaseJournalToVendorLedgerEntries
+________________________________________________
+codeunit 50122 EventHandler
+{
+    [EventSubscriber(ObjectType::Table, Database::"Vendor Ledger Entry", OnAfterCopyVendLedgerEntryFromGenJnlLine, '', false, false)]
+    local procedure OnAfterCopyVendLedgerEntryFromGenJnlLine(var VendorLedgerEntry: Record "Vendor Ledger Entry"; GenJournalLine: Record "Gen. Journal Line");
+    begin
+        VendorLedgerEntry."ZY Test" := GenJournalLine."ZY Test";
+    end;
+}
+
+tableextension 50119 GenJournalLineExt extends "Gen. Journal Line"
+{
+    fields
+    {
+        field(50100; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50119 PurchaseJournalExt extends "Purchase Journal"
+{
+    layout
+    {
+        addafter("Document No.")
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+
+        }
+    }
+}
+
+tableextension 50121 VendorLedgerEntryExt extends "Vendor Ledger Entry"
+{
+    fields
+    {
+        field(50100; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50121 VendorLedgerEntriesExt extends "Vendor Ledger Entries"
+{
+    layout
+    {
+        addafter("Document No.")
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+}
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+PurchaseOrderSubformToItemLedgerEntries
+________________________________________________
+codeunit 50122 EventHandler
+{
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Purch.-Post", OnPostItemJnlLineOnAfterCopyDocumentFields, '', false, false)]
+    local procedure OnPostItemJnlLineOnAfterCopyDocumentFields(var ItemJournalLine: Record "Item Journal Line"; PurchaseLine: Record "Purchase Line"; WarehouseReceiptHeader: Record "Warehouse Receipt Header"; WarehouseShipmentHeader: Record "Warehouse Shipment Header"; PurchRcptHeader: Record "Purch. Rcpt. Header");
+    begin
+        ItemJournalLine."ZY Test" := PurchaseLine."ZY Test";
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Item Jnl.-Post Line", OnAfterInitItemLedgEntry, '', false, false)]
+    local procedure OnAfterInitItemLedgEntry(var NewItemLedgEntry: Record "Item Ledger Entry"; var ItemJournalLine: Record "Item Journal Line"; var ItemLedgEntryNo: Integer);
+    begin
+        NewItemLedgEntry."ZY Test" := ItemJournalLine."ZY Test";
+    end;
+}
+
+tableextension 50112 PurchaseLineExt extends "Purchase Line"
+{
+    fields
+    {
+        field(50000; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50112 PurchaseOrderSubformExt extends "Purchase Order Subform"
+{
+    layout
+    {
+        addafter("No.")
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+}
+tableextension 50122 ItemJournalLineExt extends "Item Journal Line"
+{
+    fields
+    {
+        field(50000; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+tableextension 50113 ItemLedgerEntryExt extends "Item Ledger Entry"
+{
+    fields
+    {
+        field(50000; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50113 ItemLedgerEntriesExt extends "Item Ledger Entries"
+{
+    layout
+    {
+        addafter("Document No.")
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+}
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+PurchaseOrderToWarehouseReceipt
+_____________________________________________
+codeunit 50122 EventHandler
+{
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Get Source Doc. Inbound", OnAfterFindWarehouseRequestForPurchaseOrder, '', false, false)]
+    local procedure OnAfterFindWarehouseRequestForPurchaseOrder(var WarehouseRequest: Record "Warehouse Request"; PurchaseHeader: Record "Purchase Header");
+    begin
+        WarehouseRequest."ZY Test" := PurchaseHeader."ZY Test";
+        WarehouseRequest.Modify(true);
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Get Source Doc. Inbound", OnAfterCreateWhseReceiptHeaderFromWhseRequest, '', false, false)]
+    local procedure OnAfterCreateWhseReceiptHeaderFromWhseRequest(var WhseReceiptHeader: Record "Warehouse Receipt Header"; var WarehouseRequest: Record "Warehouse Request"; var GetSourceDocuments: Report "Get Source Documents");
+    begin
+        if WhseReceiptHeader."No." <> '' then begin
+            WhseReceiptHeader."ZY Test" := WarehouseRequest."ZY Test";
+            WhseReceiptHeader.Modify(true);
+        end;
+    end;
+}
+tableextension 50119 PurchaseHeaderExt extends "Purchase Header"
+{
+    fields
+    {
+        field(50100; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50119 SalesOrderExt extends "Purchase Order"
+{
+    layout
+    {
+        addafter(Status)
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+
+        }
+    }
+}
+
+tableextension 50120 WarehouseRequestExt extends "Warehouse Request"
+{
+    fields
+    {
+        field(50100; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+tableextension 50121 WarehouseReceiptHeaderExt extends "Warehouse Receipt Header"
+{
+    fields
+    {
+        field(50100; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50121 WarehouseReceiptExt extends "Warehouse Receipt"
+{
+    layout
+    {
+        addafter("Document Status")
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+                Editable = false;
+            }
+        }
+    }
+}
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+SalesJournalToCustomerLedgerEntries
+___________________________________________________
+codeunit 50122 EventHandler
+{
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Gen. Jnl.-Post Line", OnAfterInitCustLedgEntry, '', false, false)]
+    local procedure OnAfterInitCustLedgEntry(var CustLedgerEntry: Record "Cust. Ledger Entry"; GenJournalLine: Record "Gen. Journal Line"; var GLRegister: Record "G/L Register");
+    begin
+        CustLedgerEntry."ZY Test" := GenJournalLine."ZY Test";
+    end;
+}
+
+tableextension 50119 GenJournalLineExt extends "Gen. Journal Line"
+{
+    fields
+    {
+        field(50100; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50119 SalesJournalExt extends "Sales Journal"
+{
+    layout
+    {
+        addafter("Document No.")
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+
+        }
+    }
+}
+
+tableextension 50121 CustLedgerEntryExt extends "Cust. Ledger Entry"
+{
+    fields
+    {
+        field(50100; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50121 CustomerLedgerEntriesExt extends "Customer Ledger Entries"
+{
+    layout
+    {
+        addafter("Document No.")
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+}
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+SalesOrderToGeneralLedgerEntries
+______________________________________________
+codeunit 50122 EventHandler
+{
+    [EventSubscriber(ObjectType::Table, Database::"Gen. Journal Line", OnAfterCopyGenJnlLineFromSalesHeader, '', false, false)]
+    local procedure OnAfterCopyGenJnlLineFromSalesHeader(SalesHeader: Record "Sales Header"; var GenJournalLine: Record "Gen. Journal Line");
+    begin
+        GenJournalLine."ZY Test" := SalesHeader."ZY Test";
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"G/L Entry", OnAfterCopyGLEntryFromGenJnlLine, '', false, false)]
+    local procedure OnAfterCopyGLEntryFromGenJnlLine(var GLEntry: Record "G/L Entry"; var GenJournalLine: Record "Gen. Journal Line");
+    begin
+        GLEntry."ZY Test" := GenJournalLine."ZY Test";
+    end;
+}
+
+tableextension 50119 SalesHeaderExt extends "Sales Header"
+{
+    fields
+    {
+        field(50100; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50119 SalesOrderExt extends "Sales Order"
+{
+    layout
+    {
+        addafter(Status)
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+
+        }
+    }
+}
+
+tableextension 50120 GenJournalLineExt extends "Gen. Journal Line"
+{
+    fields
+    {
+        field(50100; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+tableextension 50121 GLEntryExt extends "G/L Entry"
+{
+    fields
+    {
+        field(50100; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50121 GeneralLedgerEntriesExt extends "General Ledger Entries"
+{
+    layout
+    {
+        addafter("Document No.")
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+}
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+WarehouseShipmentToPostedSalesShipment
+________________________________________________
+codeunit 50122 EventHandler
+{
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Sales-Post", OnBeforeSalesShptHeaderInsert, '', false, false)]
+    local procedure OnBeforeSalesShptHeaderInsert(var SalesShptHeader: Record "Sales Shipment Header"; SalesHeader: Record "Sales Header"; CommitIsSuppressed: Boolean; var IsHandled: Boolean; var TempWhseRcptHeader: Record "Warehouse Receipt Header" temporary; WhseReceive: Boolean; var TempWhseShptHeader: Record "Warehouse Shipment Header" temporary; WhseShip: Boolean; InvtPickPutaway: Boolean);
+    begin
+        SalesShptHeader."ZY Test" := TempWhseShptHeader."ZY Test";
+    end;
+}
+
+tableextension 50119 WarehouseShipmentHeaderExt extends "Warehouse Shipment Header"
+{
+    fields
+    {
+        field(50100; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50119 WarehouseShipmentExt extends "Warehouse Shipment"
+{
+    layout
+    {
+        addafter(Status)
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+}
+
+tableextension 50120 SalesShipmentHeaderExt extends "Sales Shipment Header"
+{
+    fields
+    {
+        field(50100; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50120 PostedSalesShipmentExt extends "Posted Sales Shipment"
+{
+    layout
+    {
+        addafter("Posting Date")
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+}
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+WhseReceiptSubformToItemLedgerEntries
+________________________________________________
+codeunit 50122 EventHandler
+{
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Whse.-Post Receipt", OnBeforeValidateQtyToReceiveOnPurchaseLine, '', false, false)]
+    local procedure OnBeforeValidateQtyToReceiveOnPurchaseLine(var PurchaseLine: Record "Purchase Line"; WarehouseReceiptLine: Record "Warehouse Receipt Line"; var IsHandled: Boolean);
+    begin
+        PurchaseLine."ZY Test" := WarehouseReceiptLine."ZY Test";
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Purch.-Post", OnPostItemJnlLineOnAfterCopyDocumentFields, '', false, false)]
+    local procedure OnPostItemJnlLineOnAfterCopyDocumentFields(var ItemJournalLine: Record "Item Journal Line"; PurchaseLine: Record "Purchase Line"; WarehouseReceiptHeader: Record "Warehouse Receipt Header"; WarehouseShipmentHeader: Record "Warehouse Shipment Header"; PurchRcptHeader: Record "Purch. Rcpt. Header");
+    begin
+        ItemJournalLine."ZY Test" := PurchaseLine."ZY Test";
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Item Jnl.-Post Line", OnAfterInitItemLedgEntry, '', false, false)]
+    local procedure OnAfterInitItemLedgEntry(var NewItemLedgEntry: Record "Item Ledger Entry"; var ItemJournalLine: Record "Item Journal Line"; var ItemLedgEntryNo: Integer);
+    begin
+        NewItemLedgEntry."ZY Test" := ItemJournalLine."ZY Test";
+    end;
+}
+
+tableextension 50115 WarehouseReceiptLineExt extends "Warehouse Receipt Line"
+{
+    fields
+    {
+        field(50000; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50115 WhseReceiptSubformExt extends "Whse. Receipt Subform"
+{
+    layout
+    {
+        addafter(Description)
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+}
+
+tableextension 50114 PurchaseLineExt extends "Purchase Line"
+{
+    fields
+    {
+        field(50000; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+tableextension 50112 ItemJournalLineExt extends "Item Journal Line"
+{
+    fields
+    {
+        field(50000; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+tableextension 50113 ItemLedgerEntryExt extends "Item Ledger Entry"
+{
+    fields
+    {
+        field(50000; "ZY Test"; Text[100])
+        {
+            Caption = 'ZY Test';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+pageextension 50113 ItemLedgerEntriesExt extends "Item Ledger Entries"
+{
+    layout
+    {
+        addafter("Document No.")
+        {
+            field("ZY Test"; Rec."ZY Test")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+}
