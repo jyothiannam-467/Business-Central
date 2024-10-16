@@ -56,3 +56,14 @@ action(BarCode)
             Caption='BarcodeTest';
             DataClassification = CustomerContent;
         }
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Var
+BarcodeSymbology:Enum "Barcode Symbology";
+BarcodeFontProvider:Interface "Barcode Font Provider";
+Barcodestr:Code[20];
+
+BarcodeFontProvider:=Enum::"Barcode Font Provider"::IDAutomationID;
+BarcodeSymbology:=Enum::"Barcode Symbology"::Code39;
+BarcodeStr:="No.";
+BarcodeFontProvider.Validateinput(BarcodeStr,BarcodeSymbology);
+EncodedText:=BarcodeFontProvider.EncodeFont(BarcodeStr,BarcodeSymbology);
