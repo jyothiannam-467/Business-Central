@@ -1,0 +1,7 @@
+Below is Microsoft Recommendation - 
+
+204 Sales - Quote   1304 Sales - Quote
+205 Order Confirmation	1305 Sales - Confirmation
+206 Sales - Invoice	1306 Sales - Invoice
+207 Sales - Credit Memo 1307 Sales - Credit Memo
+To Check your customer is using old reports or not, Navigate to Report Selection Sales and Check Report ID for Quote, Order, Invoice and Credit Memo.
