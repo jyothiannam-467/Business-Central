@@ -1,3 +1,13 @@
+ReportSubstitution
+_____________________________
+  [EventSubscriber(ObjectType::Codeunit, Codeunit::ReportManagement, 'OnAfterSubstituteReport', '', false, false)]
+    local procedure OnSubstituteReport(ReportId: Integer; var NewReportId: Integer)
+    begin
+        case ReportId of
+            Report::"Standard Sales - Order Conf.":
+                NewReportId := Report::ZBAOrderConfirmationNew;
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  To Assign Variables
 ___________________________________
  local procedure OnAfterInitHeaderDefaults(var PurchLine: Record "Purchase Line"; PurchHeader: Record "Purchase Header"; var TempPurchLine: record "Purchase Line" temporary)
