@@ -1,0 +1,45 @@
+https://mohana-dynamicsnav.blogspot.com/2023/12/print-directly-to-local-printers-from.html
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Print directly to local printers from the Job Queue with E-Print in Business Central SaaS
+____________________________________________________________________________________________
+
+We cannot select "Report Output Type" as "Print" in "Job Queue" to print a report in Business Central SaaS
+
+We get the following message.
+
+You cannot select a printer from this online product. Instead, save it as PDF, or another format, which you can print later.
+
+The output type has been set to PDF.
+
+We need to make the below code change to achieve this.
+
+[EventSubscriber(ObjectType::Codeunit, Codeunit::"Job Queue Start Report", 'OnBeforeRunReport', '', false, false)]
+
+local procedure "Job Queue Start Report_OnBeforeRunReport"(ReportID: Integer; var JobQueueEntry: Record "Job Queue Entry"; var IsHandled: Boolean);
+
+begin
+
+        if JobQueueEntry."Job Queue Category Code" = 'PRINT' then
+
+            JobQueueEntry."Report Output Type" := JobQueueEntry."Report Output Type"::Print;
+
+end;
+
+Based on that, I created a “PRINT” Job Queue Category and changed the Report Output Type before running the report.
+
+Next, Navigate to the “Printer Management” page and set up an “Email Printer”.
+
+Enter your printer's E-Mail address
+
+Select the “Email printer” for the report you want to print on the “Printer Selection” page
+
+Create a “Job Queue Entry” as per your requirements.
+
+NOTE: do not forget to set “Job Queue Category Code” as “PRINT”
+
+You can ignore “Report Output Type” here as we change it via code.
+
+Or you can create an action on the “Job Queue Entry” page to change it to "Print" as well.
+
+When the Job Queue has successfully executed then an email will be sent to the printer's email address which will be taken care of.
