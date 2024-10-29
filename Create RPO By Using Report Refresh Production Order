@@ -1,0 +1,34 @@
+ ReleasedProdcutionOrderLvar.INIT();
+        ReleasedProdcutionOrderLvar."No." := '';
+        ReleasedProdcutionOrderLvar.Status := ReleasedProdcutionOrderLvar.Status::Released;
+        ReleasedProdcutionOrderLvar.INSERT(TRUE);
+        ReleasedProdcutionOrderLvar.VALIDATE("Source Type", Rec."Source Type");
+        ReleasedProdcutionOrderLvar.VALIDATE("Source No.", Rec."Source No.");
+        ReleasedProdcutionOrderLvar.VALIDATE("Location Code", Rec."Location Code");
+        ReleasedProdcutionOrderLvar.VALIDATE(Quantity, Rec."Qty to Create RPO");
+        ReleasedProdcutionOrderLvar.VALIDATE("Qty to Create RPO", Rec."Qty to Create RPO");
+        ReleasedProdcutionOrderLvar."Firm Planned Order No." := Rec."No.";
+        ReleasedProdcutionOrderLvar."SO No." := Rec."SO No.";
+        ReleasedProdcutionOrderLvar.VALIDATE("Shortcut Dimension 1 Code", Rec."Shortcut Dimension 1 Code");
+
+        ReleasedProdcutionOrderLvar.MODIFY();
+        ProductionOrder.RESET();
+        ProductionOrder.SETRANGE(Status, ProductionOrder.Status::Released);
+        ProductionOrder.SETRANGE("No.", ReleasedProdcutionOrderLvar."No.");
+        IF ProductionOrder.FINDFIRST() THEN BEGIN
+            COMMIT();
+            RefreshProductionOrderRep.InitializeRequest(Direction2::Backward, TRUE, TRUE, TRUE, FALSE);
+            RefreshProductionOrderRep.USEREQUESTPAGE(FALSE);
+            RefreshProductionOrderRep.SETTABLEVIEW(ProductionOrder);
+            RefreshProductionOrderRep.RUNMODAL();
+        END;
+
+        Rec."Qty to Create RPO" := 0;
+        Rec.MODIFY;
+
+Var
+
+ReleasedProdcutionOrderLvar: Record "Production Order";
+        RefreshProductionOrderRep: Report "Refresh Production Order";
+        ProductionOrder: Record "Production Order";
+        Direction2: Option Forward,Backward;
