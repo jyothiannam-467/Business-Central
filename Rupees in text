@@ -8,3 +8,9 @@ CheckGRec.FormatNoText(NumberText, ROUND(ABS(PayGrandTotal + DeductionsTotal), 1
 var
         CheckGRec: Codeunit "Approval Mgmt B2B";
         NumberText: array[2] of Text;
+
+   RepCheck.InitTextVariable();
+   RepCheck.FormatNoText(NoText, Round(TotalAmount, 0.01), CurCode);
+   AmountinWords[1] := NoText[1] + NoText[2];
+
+RepCheck: Report Check;
