@@ -1,0 +1,22 @@
+FilterPageBuilder Data type
+_______________________________
+
+Stores filter configurations for a filter page. A filter page is a dynamic page type that contains one or more filter controls that enables users to set filters on fields of the underlying tables.
+
+  procedure LookupConditionArgument(var Argument: Text[2048])
+    var
+        Company: Record Company;
+        FilterPageBuilder: FilterPageBuilder;
+        ItemName: Text;
+        FormatItemNameLbl: Label '%1 record', Comment = '%1 - Table Caption';
+    begin
+        ItemName := StrSubstNo(FormatItemNameLbl, Company.TableCaption());
+        FilterPageBuilder.AddTable(ItemName, DATABASE::Company);
+        FilterPageBuilder.AddFieldNo(ItemName, Company.FieldNo(Name));
+        FilterPageBuilder.AddFieldNo(ItemName, Company.FieldNo("Display Name"));
+        FilterPageBuilder.AddFieldNo(ItemName, Company.FieldNo("Evaluation Company"));
+        if Argument <> '' then
+            FilterPageBuilder.SetView(ItemName, UserFilterCondFunc.ConvertTextToView(Argument));
+        if FilterPageBuilder.RunModal() then
+            Argument := UserFilterCondFunc.ConvertViewToText(FilterPageBuilder.GetView(ItemName, false))
+    end;
