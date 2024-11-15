@@ -1,0 +1,83 @@
+procedure CreditGenJournalLinesInsert(PayrollRegisters: Record "Payroll Register"; Location: Code[50]; Department: Code[50]; BusinessUnit: Code[50]; PayElement: Code[100]; TemplateName: Code[10]; BatchName: Code[10]; GLAccountNum: Code[20]; Amount: Decimal)
+    var
+        GenJournalLineRec: Record "Gen. Journal Line";
+        GenJournalBatch: Record "Gen. Journal Batch";
+        NoSeries: Codeunit "No. Series";
+        LineNo: Integer;
+        DimSetID: Integer;
+        TempDimensionSetEntry: Record "Dimension Set Entry" temporary;
+        PayrollDimValues: Record "Payroll Dimensions Mapping";
+        DimensionManagement: Codeunit DimensionManagement;
+        DimensionSetEntry: Record "Dimension Set Entry";
+    begin
+        GenJournalLineRec.Reset();
+        GenJournalLineRec.SetRange("Journal Template Name", TemplateName);
+        GenJournalLineRec.SetRange("Journal Batch Name", BatchName);
+        if GenJournalLineRec.FindLast() then
+            LineNo := GenJournalLineRec."Line No." + 10000
+        else
+            LineNo := 10000;
+
+        GenJournalLineRec.Init();
+        GenJournalLineRec."Journal Template Name" := TemplateName;
+        GenJournalLineRec."Journal Batch Name" := BatchName;
+        if GenJournalBatch.Get(TemplateName, BatchName) then
+            GenJournalLineRec."Document No." := NoSeries.GetNextNo(GenJournalBatch."No. Series", Today, true);
+        GenJournalLineRec."Document Type" := GenJournalLineRec."Document Type"::" ";
+        GenJournalLineRec."Posting Date" := Today;
+        GenJournalLineRec."Line No." := LineNo;
+        GenJournalLineRec."Account Type" := GenJournalLineRec."Account Type"::"G/L Account";
+        GenJournalLineRec."Salary Component Code" := PayElement;
+        GenJournalLineRec."Account No." := GLAccountNum;
+        GenJournalLineRec.Amount := Amount;
+        if GenJournalLineRec.Insert(true) then begin
+            DimSetID := 0;
+            TempDimensionSetEntry.DeleteAll();
+            if Location <> '' then begin
+                if PayrollDimValues.Get(Location) then begin
+                    TempDimensionSetEntry.Init();
+                    TempDimensionSetEntry.Validate("Dimension Code", PayrollDimValues."Dimension Code");
+                    TempDimensionSetEntry.Validate("Dimension Value Code", PayrollDimValues."Dimension Value");
+                    TempDimensionSetEntry.Insert();
+                end;
+            end;
+            if Department <> '' then begin
+                if PayrollDimValues.Get(Department) then begin
+                    TempDimensionSetEntry.Init();
+                    TempDimensionSetEntry.Validate("Dimension Code", PayrollDimValues."Dimension Code");
+                    TempDimensionSetEntry.Validate("Dimension Value Code", PayrollDimValues."Dimension Value");
+                    TempDimensionSetEntry.Insert();
+                end;
+            end;
+            if BusinessUnit <> '' then begin
+                if PayrollDimValues.Get(BusinessUnit) then begin
+                    TempDimensionSetEntry.Init();
+                    TempDimensionSetEntry.Validate("Dimension Code", PayrollDimValues."Dimension Code");
+                    TempDimensionSetEntry.Validate("Dimension Value Code", PayrollDimValues."Dimension Value");
+                    TempDimensionSetEntry.Insert();
+                end;
+
+            end;
+            DimSetID := DimensionManagement.GetDimensionSetID(TempDimensionSetEntry);
+
+            DimensionSetEntry.Reset();
+            DimensionSetEntry.SetRange("Dimension Set ID", DimSetID);
+            if not DimensionSetEntry.FindFirst() then begin
+                TempDimensionSetEntry.Reset();
+                if TempDimensionSetEntry.FindSet() then
+                    repeat
+                        DimensionSetEntry.Init();
+                        DimensionSetEntry.Validate("Dimension Set ID", DimSetID);
+                        DimensionSetEntry.Validate("Dimension Code", TempDimensionSetEntry."Dimension Code");
+                        DimensionSetEntry.Validate("Dimension Value Code", TempDimensionSetEntry."Dimension Value Code");
+                        DimensionSetEntry.Insert();
+                    until TempDimensionSetEntry.Next() = 0;
+            end;
+            if DimSetID <> 0 then begin
+                GenJournalLineRec.Validate("Dimension Set ID", DimSetID);
+                GenJournalLineRec.Modify();
+            end;
+            TempDimensionSetEntry.Reset();
+            TempDimensionSetEntry.DeleteAll();
+        end;
+    end;
