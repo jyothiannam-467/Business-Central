@@ -1,3 +1,9 @@
+New-Mangaing New in Item Card 
+__________________________________
+
+[EventSubscriber(ObjectType::Page, page::"Item Card", 'OnBeforeCreateItemFromTemplate', '', false, false)]
+    local procedure OnBeforeCreateItemFromTemplate(var NewMode: Boolean; var ItemRec: Record Item; var Item: Record Item)
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ReportSubstitution
 _____________________________
   [EventSubscriber(ObjectType::Codeunit, Codeunit::ReportManagement, 'OnAfterSubstituteReport', '', false, false)]
