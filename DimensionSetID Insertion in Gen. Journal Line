@@ -81,3 +81,224 @@ procedure CreditGenJournalLinesInsert(PayrollRegisters: Record "Payroll Register
             TempDimensionSetEntry.DeleteAll();
         end;
     end;
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+For Multiple Companies changing Companies for to get dimension set ID is not possible in order to achieve that need to save as base procedures
+procedure GetDimensionSetID(var DimSetEntry: Record "Dimension Set Entry"; CompanyRefersTo: Enum "Company Refers To"): Integer
+    var
+        DimSetEntry2: Record "Dimension Set Entry";
+        DimSetTreeNode: Record "Dimension Set Tree Node";
+        Found: Boolean;
+    begin
+        if CompanyRefersTo = CompanyRefersTo::"Company 1" then begin
+            DimSetEntry2.ChangeCompany(ExternalIntegrationSetupRec."Company 1");
+            DimSetTreeNode.ChangeCompany(ExternalIntegrationSetupRec."Company 1");
+        end
+        else
+            if CompanyRefersTo = CompanyRefersTo::"Company 2" then begin
+                DimSetEntry2.ChangeCompany(ExternalIntegrationSetupRec."Company 2");
+                DimSetTreeNode.ChangeCompany(ExternalIntegrationSetupRec."Company 2");
+            end;
+
+        DimSetEntry2.Copy(DimSetEntry);
+        if DimSetEntry."Dimension Set ID" > 0 then
+            DimSetEntry.SetRange("Dimension Set ID", DimSetEntry."Dimension Set ID");
+
+        DimSetEntry.SetCurrentKey("Dimension Value ID");
+        DimSetEntry.SetFilter("Dimension Code", '<>%1', '');
+        DimSetEntry.SetFilter("Dimension Value Code", '<>%1', '');
+
+        if not DimSetEntry.FindSet() then begin
+            DimSetEntry.Copy(DimSetEntry2);
+            exit(0);
+        end;
+
+        Found := true;
+        DimSetTreeNode."Dimension Set ID" := 0;
+        repeat
+            DimSetEntry.TestField("Dimension Value ID");
+            if Found then
+                if not DimSetTreeNode.Get(DimSetTreeNode."Dimension Set ID", DimSetEntry."Dimension Value ID") then begin
+                    Found := false;
+                    DimSetTreeNode.LockTable();
+                end;
+            if not Found then begin
+                DimSetTreeNode."Parent Dimension Set ID" := DimSetTreeNode."Dimension Set ID";
+                DimSetTreeNode."Dimension Value ID" := DimSetEntry."Dimension Value ID";
+                DimSetTreeNode."Dimension Set ID" := 0;
+                DimSetTreeNode."In Use" := false;
+                if not DimSetTreeNode.Insert(true) then
+                    DimSetTreeNode.Get(DimSetTreeNode."Parent Dimension Set ID", DimSetTreeNode."Dimension Value ID");
+            end;
+        until DimSetEntry.Next() = 0;
+        if not DimSetTreeNode."In Use" then begin
+            if Found then begin
+                DimSetTreeNode.LockTable();
+                DimSetTreeNode.Get(DimSetTreeNode."Parent Dimension Set ID", DimSetTreeNode."Dimension Value ID");
+            end;
+            DimSetTreeNode."In Use" := true;
+            DimSetTreeNode.Modify();
+            InsertDimSetEntries(DimSetEntry, DimSetTreeNode."Dimension Set ID", CompanyRefersTo);
+        end;
+
+        DimSetEntry.Copy(DimSetEntry2);
+
+        exit(DimSetTreeNode."Dimension Set ID");
+    end;
+
+    local procedure InsertDimSetEntries(var DimSetEntry: Record "Dimension Set Entry"; NewID: Integer; CompanyRefersTo: Enum "Company Refers To")
+    var
+        DimSetEntry2: Record "Dimension Set Entry";
+    begin
+        if CompanyRefersTo = CompanyRefersTo::"Company 1" then begin
+            DimSetEntry2.ChangeCompany(ExternalIntegrationSetupRec."Company 1");
+        end
+        else
+            if CompanyRefersTo = CompanyRefersTo::"Company 2" then begin
+                DimSetEntry2.ChangeCompany(ExternalIntegrationSetupRec."Company 2");
+            end;
+        DimSetEntry2.LockTable();
+        if DimSetEntry.FindSet() then
+            repeat
+                DimSetEntry2 := DimSetEntry;
+                DimSetEntry2."Dimension Set ID" := NewID;
+                DimSetEntry2."Global Dimension No." := DimSetEntry2.GetGlobalDimNo();
+                DimSetEntry2.Insert();
+            until DimSetEntry.Next() = 0;
+    end;
+
+    procedure UpdateGlobalDimFromDimSetID(DimSetID: Integer; var GlobalDimVal1: Code[20]; var GlobalDimVal2: Code[20]; CompanyRefersTo: Enum "Company Refers To")
+    var
+        ShortcutDimCode: array[8] of Code[20];
+    begin
+        GetGlobalDimensions(DimSetID, ShortcutDimCode, CompanyRefersTo);
+        GlobalDimVal1 := ShortcutDimCode[1];
+        GlobalDimVal2 := ShortcutDimCode[2];
+    end;
+
+    procedure GetGlobalDimensions(DimSetID: Integer; var ShortcutDimCode: array[8] of Code[20]; CompanyRefersTo: Enum "Company Refers To")
+    var
+        i: Integer;
+        DimensionSetEntry: Record "Dimension Set Entry";
+    begin
+        if CompanyRefersTo = CompanyRefersTo::"Company 1" then begin
+            DimensionSetEntry.ChangeCompany(ExternalIntegrationSetupRec."Company 1");
+        end
+        else
+            if CompanyRefersTo = CompanyRefersTo::"Company 2" then begin
+                DimensionSetEntry.ChangeCompany(ExternalIntegrationSetupRec."Company 2");
+            end;
+        Clear(ShortcutDimCode);
+        if DimSetID = 0 then
+            exit;
+        GetGLSetup();
+        for i := 1 to 2 do
+            if GLSetupShortcutDimCode[i] <> '' then
+                if DimensionSetEntry.Get(DimSetID, GLSetupShortcutDimCode[i]) then
+                    ShortcutDimCode[i] := DimensionSetEntry."Dimension Value Code";
+    end;
+
+    local procedure GetGLSetup()
+    begin
+        if WhenGotGLSetup = 0DT then
+            WhenGotGLSetup := CurrentDateTime;
+        if CurrentDateTime > WhenGotGLSetup + 60000 then
+            HasGotGLSetup := false;
+        if HasGotGLSetup then
+            exit;
+        GLSetup.Get();
+        GLSetupShortcutDimCode[1] := GLSetup."Shortcut Dimension 1 Code";
+        GLSetupShortcutDimCode[2] := GLSetup."Shortcut Dimension 2 Code";
+        GLSetupShortcutDimCode[3] := GLSetup."Shortcut Dimension 3 Code";
+        GLSetupShortcutDimCode[4] := GLSetup."Shortcut Dimension 4 Code";
+        GLSetupShortcutDimCode[5] := GLSetup."Shortcut Dimension 5 Code";
+        GLSetupShortcutDimCode[6] := GLSetup."Shortcut Dimension 6 Code";
+        GLSetupShortcutDimCode[7] := GLSetup."Shortcut Dimension 7 Code";
+        GLSetupShortcutDimCode[8] := GLSetup."Shortcut Dimension 8 Code";
+        HasGotGLSetup := true;
+        WhenGotGLSetup := CurrentDateTime;
+    end;
+
+ procedure CreditGenJournalLinesInsert(CompanyRefersTo: Enum "Company Refers To"; Location: Code[50];
+                                                               Department: Code[50];
+                                                               PayElement: Code[100];
+                                                               TemplateName: Code[10];
+                                                               BatchName: Code[10];
+                                                               GLAccountNum: Code[20];
+                                                               Amount: Decimal): Boolean
+    var
+        GenJournalLineRec: Record "Gen. Journal Line";
+        GenJournalBatch: Record "Gen. Journal Batch";
+        NoSeries: Codeunit "No. Series";
+        LineNo, DimSetID : Integer;
+        PayrollDimValues: Record "Payroll Dimensions Mapping";
+        TempDimensionSetEntry: Record "Dimension Set Entry" temporary;
+        DimMgt: Codeunit DimensionManagement;
+        ShortcutDimCode: array[8] of Code[20];
+    begin
+        ExternalIntegrationSetupRec.Get();
+        if (ExternalIntegrationSetupRec."Company 1" = '') or (ExternalIntegrationSetupRec."Company 2" = '') then
+            Error(ErrMsgLbl_006);
+        if CompanyRefersTo = CompanyRefersTo::"Company 1" then begin
+            GenJournalLineRec.ChangeCompany(ExternalIntegrationSetupRec."Company 1");
+            TempDimensionSetEntry.ChangeCompany(ExternalIntegrationSetupRec."Company 1");
+        end
+        else
+            if CompanyRefersTo = CompanyRefersTo::"Company 2" then begin
+                GenJournalLineRec.ChangeCompany(ExternalIntegrationSetupRec."Company 2");
+                TempDimensionSetEntry.ChangeCompany(ExternalIntegrationSetupRec."Company 2");
+            end;
+        GenJournalLineRec.Reset();
+        GenJournalLineRec.SetRange("Journal Template Name", TemplateName);
+        GenJournalLineRec.SetRange("Journal Batch Name", BatchName);
+        if GenJournalLineRec.FindLast() then
+            LineNo := GenJournalLineRec."Line No." + 10000
+        else
+            LineNo := 10000;
+        GenJournalLineRec.Init();
+        GenJournalLineRec."Journal Template Name" := TemplateName;
+        GenJournalLineRec."Journal Batch Name" := BatchName;
+        if GenJournalBatch.Get(TemplateName, BatchName) then begin
+            if DocumentNo = '' then
+                DocumentNo := NoSeries.GetNextNo(GenJournalBatch."No. Series", Today, true);
+        end;
+        GenJournalLineRec."Document No." := DocumentNo;
+        GenJournalLineRec."Document Type" := GenJournalLineRec."Document Type"::" ";
+        GenJournalLineRec."Posting Date" := Today;
+        GenJournalLineRec."Line No." := LineNo;
+        GenJournalLineRec."Account Type" := GenJournalLineRec."Account Type"::"G/L Account";
+        GenJournalLineRec."Salary Component Code" := PayElement;
+        GenJournalLineRec."Account No." := GLAccountNum;
+        GenJournalLineRec.Amount := Amount;
+        GenJournalLineRec.Insert(true);
+        if PayrollDimValues.get(Location, Department) then begin
+            DimSetID := 0;
+            TempDimensionSetEntry.DeleteAll();
+            if PayrollDimValues."Location/Cost Centre" <> '' then begin
+                TempDimensionSetEntry.Init();
+                TempDimensionSetEntry.Validate("Dimension Code", 'LOCATION/COST CENTER');
+                TempDimensionSetEntry.Validate("Dimension Value Code", PayrollDimValues."Location/Cost Centre");
+                TempDimensionSetEntry.Insert();
+            end;
+            if PayrollDimValues.Program <> '' then begin
+                TempDimensionSetEntry.Init();
+                TempDimensionSetEntry.Validate("Dimension Code", 'PROGRAM');
+                TempDimensionSetEntry.Validate("Dimension Value Code", PayrollDimValues.Program);
+                TempDimensionSetEntry.Insert();
+            end;
+            if PayrollDimValues.Purpose <> '' then begin
+                TempDimensionSetEntry.Init();
+                TempDimensionSetEntry.Validate("Dimension Code", 'PURPOSE');
+                TempDimensionSetEntry.Validate("Dimension Value Code", PayrollDimValues.Purpose);
+                TempDimensionSetEntry.Insert();
+            end;
+            DimSetID := GetDimensionSetID(TempDimensionSetEntry, CompanyRefersTo);
+
+            if DimSetID <> 0 then begin
+                GenJournalLineRec.Validate("Dimension Set ID", DimSetID);
+                UpdateGlobalDimFromDimSetID(GenJournalLineRec."Dimension Set ID", GenJournalLineRec."Shortcut Dimension 1 Code", GenJournalLineRec."Shortcut Dimension 2 Code", CompanyRefersTo);
+                GenJournalLineRec.Modify();
+            end;
+        End;
+    End;
+
