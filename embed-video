@@ -1,10 +1,37 @@
-pageextension 80002 ItemCardExt extends "Item Card"
+Note : Right click on video then we get embed option once clicking the embed option we get kind of below link 
+(<iframe width="560" height="315" src="https://www.youtube.com/embed/UXhGRVTndQA?si=0hpD6mxyxbPNLTze" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>)
+Video Url := 'https://www.youtube.com/embed/UXhGRVTndQA?si=0hpD6mxyxbPNLTze';
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+codeunit 50118 RegisterNewVideos
+{
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::Video, OnRegisterVideo, '', false, false)]
+    local procedure OnRegisterVideo(var Sender: Codeunit Video);
+    begin
+        Sender.Register('801277c3-645a-4471-a40b-d6cfdad7112e', 'What''s new: Business Central developer tools (2023 release wave 2)', 'https://www.youtube.com/embed/TY82NR2hGEg', Enum::"Video Category"::Customize);
+        Sender.Register('801277c3-645a-4471-a40b-d6cfdad7112e', 'Get low friction go lives and optimize your investments with telemetry data', 'https://www.youtube.com/embed/F_pssS0FtUc', Enum::"Video Category"::ReadyForBusiness);
+        Sender.Register('801277c3-645a-4471-a40b-d6cfdad7112e', 'Introducing: Analyze data on lists and queries', 'https://www.youtube.com/embed/qmLVKyHRhNc', Enum::"Video Category"::ReadyForBusiness);
+    end;
+}
+
+tableextension 50115 ItemExt extends Item
+{
+    fields
+    {
+        field(50000; VideoURL; Text[100])
+        {
+            Caption = 'Video URL';
+            Description = 'Embed video';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+pageextension 50115 ItemCardExt extends "Item Card"
 {
     layout
     {
         addafter("Purchasing Code")
         {
-            field(VideoURL; VideoURL)
+            field(VideoURL; Rec.VideoURL)
             {
                 ApplicationArea = All;
                 ToolTip = 'Specifies the Video Url, such as youtube.';
@@ -28,9 +55,82 @@ pageextension 80002 ItemCardExt extends "Item Card"
                 var
                     VideoCod: Codeunit Video;
                 begin
-                    VideoCod.Play(VideoURL);
+                    VideoCod.Play(Rec.VideoURL);
                 end;
             }
         }
     }
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+PS:If you don’t need to open video in Business Central, just use Hyperlink(Text) Method. This does not require an Embed URL.
+
+pageextension 50100 CustomerListExt extends "Customer List"
+{
+    actions
+    {
+        addfirst(processing)
+        {
+            action(RunHyperLink)
+            {
+                Caption = 'Run HyperLink';
+                ApplicationArea = All;
+                Promoted = true;
+                PromotedIsBig = true;
+                PromotedCategory = Process;
+                trigger OnAction()
+                begin
+                    Hyperlink('https://www.youtube.com/watch?v=qmLVKyHRhNc');
+                end;
+            }
+            action(RunHyperLinkInBC)
+            {
+                Caption = 'Run HyperLink in BC';
+                ApplicationArea = All;
+                Promoted = true;
+                PromotedIsBig = true;
+                PromotedCategory = Process;
+                trigger OnAction()
+                var
+                    ZYHyperLink: Page "ZY HyperLink";
+                begin
+                    ZYHyperLink.SetURL('https://www.youtube.com/embed/TY82NR2hGEg');
+                    ZYHyperLink.Run();
+                end;
+            }
+        }
+    }
+}
+page 50111 "ZY HyperLink"
+{
+    Extensible = false;
+    Caption = 'HyperLink';
+    Editable = false;
+    PageType = Card;
+    layout
+    {
+        area(content)
+        {
+            group(Control5)
+            {
+                ShowCaption = false;
+            }
+            usercontrol(WebPageViewer; "Microsoft.Dynamics.Nav.Client.WebPageViewer")
+            {
+                ApplicationArea = All;
+                trigger ControlAddInReady(callbackUrl: Text)
+                begin
+                    CurrPage.WebPageViewer.Navigate(URL);
+                end;
+                trigger Callback(data: Text)
+                begin
+                    CurrPage.Close();
+                end;
+            }
+        }
+    }
+    var
+        URL: Text;
+    procedure SetURL(NavigateToURL: Text)
+    begin
+        URL := NavigateToURL;
+    end;
 }
