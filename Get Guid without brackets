@@ -1,0 +1,4 @@
+Procedure GetIdWithoutBrackets(Id:Guid):Text
+Begin
+    Exit(Format(Id).TrimStart('{').TrimEnd('}'));
+End;
