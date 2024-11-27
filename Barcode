@@ -67,3 +67,145 @@ BarcodeSymbology:=Enum::"Barcode Symbology"::Code39;
 BarcodeStr:="No.";
 BarcodeFontProvider.Validateinput(BarcodeStr,BarcodeSymbology);
 EncodedText:=BarcodeFontProvider.EncodeFont(BarcodeStr,BarcodeSymbology);
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+------------------------------https://ivansingleton.dev/working-with-1d-and-2d-barcodes-with-word-reports/----------------------------------------------------------------------------------------------------
+Bardcode 1D
+_______________
+
+To create 1-dimensional barcodes we must use the following interface:
+BarcodeFontProvider: Interface "Barcode Font Provider"
+The following enum allows us to initialize the previous interface. For now, it only has IDAutomation1D as the only option.
+BarcodeFontProvider := Enum::"Barcode Font Provider"::IDAutomation1D;
+Once we have configured the font provider in the previous step, we must choose the symbology to use. This comes to represents the font to use.
+BarcodeSymbology: Enum "Barcode Symbology";
+The next step will be to encode our information, for the example that we are doing, we will print the barcode of the Items, then we will use Item No as the string to convert, the result will be stored in the text variable Code39_1D.
+ local procedure Generate_Bardcode_Code39_1D()
+    var
+        BarcodeSymbology: Enum "Barcode Symbology";
+        BarcodeFontProvider: Interface "Barcode Font Provider";
+        BarcodeString: Text;
+    begin
+        BarcodeFontProvider := Enum::"Barcode Font Provider"::IDAutomation1D;
+        BarcodeSymbology := Enum::"Barcode Symbology"::"Code39";
+        BarcodeString := Item."No.";
+        BarcodeFontProvider.ValidateInput(BarcodeString, BarcodeSymbology);
+        Code39_1D := BarcodeFontProvider.EncodeFont(BarcodeString, BarcodeSymbology);
+    end;
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Bardcode 2D
+______________
+
+Once we create our procedure in charge of embedding the type of font that will render us the bar code for 1D, doing it for 2D is almost the same, what changes are small details.
+We must select the provider as follows:
+BarcodeFontProvider2D: Interface "Barcode Font Provider 2D";
+Once we have configured the font provider in the previous step in this case for 2D, we must choose the symbology to use.
+BarcodeSymbology2D: Enum "Barcode Symbology 2D";
+Similar to the case of 1D, we must convert our Item No to our barcode that we will store in our text variable QRCode_2D.
+
+    local procedure Generate_Bardcode_QRCode_2D()
+    var
+        BarcodeSymbology2D: Enum "Barcode Symbology 2D";
+        BarcodeFontProvider2D: Interface "Barcode Font Provider 2D";
+        BarcodeString: Text;
+    begin
+        BarcodeFontProvider2D := Enum::"Barcode Font Provider 2D"::IDAutomation2D;
+        BarcodeSymbology2D := Enum::"Barcode Symbology 2D"::"QR-Code";
+        BarcodeString := Item."No.";
+        QRCode_2D := BarcodeFontProvider2D.EncodeFont(BarcodeString, BarcodeSymbology2D);
+    end;
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Report
+___________
+report 80100 ItemBarCode1D2D
+{
+    UsageCategory = Administration;
+    ApplicationArea = All;
+    DefaultRenderingLayout = "src\reports\ItemBarcodes.docx";
+    Caption = 'Item Barcodes';
+    dataset
+    {
+        dataitem(Item; Item)
+        {
+            DataItemTableView = sorting("No.");
+            RequestFilterFields = "No.";
+            RequestFilterHeading = 'Items';
+            column(No_; "No.")
+            {
+            }
+            column(Description; Description)
+            {
+            }
+
+            column(Unit_Price; "Unit Price")
+            {
+            }
+            column(BardcodeQRCode1D; Code39_1D)
+            {
+            }
+            column(BardcodeQRCode2D; QRCode_2D)
+            {
+            }
+            trigger OnAfterGetRecord()
+            begin
+                Generate_Bardcode_Code39_1D();
+                Generate_Bardcode_QRCode_2D();
+            end;
+        }
+    }
+
+    rendering
+    {
+        layout("src\reports\ItemBarcodes.docx")
+        {
+            Type = Word;
+            LayoutFile = 'src\reports\ItemBarcodes.docx';
+        }
+        layout("src\reports\ItemBarcodes.rdl")
+        {
+            Type = RDLC;
+            LayoutFile = 'src\reports\ItemBarcodes.rdl';
+        }
+
+    }
+
+    local procedure Generate_Bardcode_Code39_1D()
+    var
+        BarcodeSymbology: Enum "Barcode Symbology";
+        BarcodeFontProvider: Interface "Barcode Font Provider";
+        BarcodeString: Text;
+    begin
+        BarcodeFontProvider := Enum::"Barcode Font Provider"::IDAutomation1D;
+        BarcodeSymbology := Enum::"Barcode Symbology"::"Code39";
+        BarcodeString := Item."No.";
+        BarcodeFontProvider.ValidateInput(BarcodeString, BarcodeSymbology);
+        Code39_1D := BarcodeFontProvider.EncodeFont(BarcodeString, BarcodeSymbology);
+    end;
+
+    local procedure Generate_Bardcode_QRCode_2D()
+    var
+        BarcodeSymbology2D: Enum "Barcode Symbology 2D";
+        BarcodeFontProvider2D: Interface "Barcode Font Provider 2D";
+        BarcodeString: Text;
+    begin
+        BarcodeFontProvider2D := Enum::"Barcode Font Provider 2D"::IDAutomation2D;
+        BarcodeSymbology2D := Enum::"Barcode Symbology 2D"::"QR-Code";
+        BarcodeString := Item."No.";
+        QRCode_2D := BarcodeFontProvider2D.EncodeFont(BarcodeString, BarcodeSymbology2D);
+    end;
+
+
+    var
+        Code39_1D: Text;
+        QRCode_2D: Text;
+}
+rendering
+    {
+        layout("src\reports\ItemBarcodes.docx")
+        {
+            Type = Word;
+            LayoutFile = 'src\reports\ItemBarcodes.docx';
+        }
+    }
+------------------------------https://ivansingleton.dev/working-with-1d-and-2d-barcodes-with-word-reports/------------------------------------------------------------------------------
