@@ -1,0 +1,113 @@
+----------------------------------------------------------------------------------------LIST-------------------------------------------------------------------------------------------------------------------------------------------
+A list is a strongly typed one dimension unbounded array
+
+local procedure TestListAssignment()
+var
+    i: Integer;
+    ListNumberOne: List of [Integer];
+    ListNumberTwo: List of [Integer];
+begin
+    for i := 1 to 20 do
+        ListNumberOne.Add(i);
+
+    ListNumberTwo := ListNumberOne;
+
+    ListNumberTwo.Add(21);
+
+    Message('List1 count: %1\List2 count: %2', ListNumberOne.Count(), ListNumberTwo.Count());
+end;
+Note : For ablove Code That's right, the assignment is not copying. We just pass the same memory location to another variable. So be careful. To shallow copy, we should use the GetRange method.
+local procedure TestListShallowCopy()
+var
+    i: Integer;
+    ListNumberOne: List of [Integer];
+    ListNumberTwo: List of [Integer];
+begin
+    for i := 1 to 20 do
+        ListNumberOne.Add(i);
+
+    ListNumberTwo := ListNumberOne.GetRange(1, ListNumberOne.Count());
+
+    ListNumberTwo.Add(21);
+
+    Message('List1 count: %1\List2 count: %2', ListNumberOne.Count(), ListNumberTwo.Count());
+end;
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+var
+    ListVariable1: List of [List of [Integer]];
+    ListVariable2: List of [List of [List of [Text]]];
+
+local procedure TestNestedListShallowCopy()
+var
+    ListNumberOne: List of [List of [Integer]];
+    ListNumberTwo: List of [List of [Integer]];
+    NestedList: List of [Integer];
+    i: Integer;
+    k: Integer;
+begin
+    //ListNumberOne will contain 25 NestedList, Nested list contain numbers from 6 to 10 (5 in total)
+    for k := 6 to 10 do begin
+        NestedList.Add(k);
+        for i := 1 to 5 do
+            ListNumberOne.Add(NestedList);
+    end;
+
+    //Shallow copy ListNumberOne to ListNumberTwo
+    ListNumberTwo := ListNumberOne.GetRange(1, ListNumberOne.Count());
+
+    //Additional number to Nested List will be displayed in ListNumberOne and ListNumberTwo as well
+    NestedList.Add(11);
+
+    //Result is 6 and 6 (6..11), because nested list is updated in previous step (we just check first nested list by index 1)
+    Message('NestedList1 count: %1\NestedList2 count: %2',
+        ListNumberOne.Get(1).Count(),
+        ListNumberTwo.Get(1).Count());
+end;
+
+local procedure TestNestedListDeepCopy()
+var
+    ListNumberOne: List of [List of [Integer]];
+    ListNumberTwo: List of [List of [Integer]];
+    NestedList: List of [Integer];
+    i: Integer;
+    k: Integer;
+begin
+    //ListNumberOne will contain 25 NestedList, Nested list contain numbers from 6 to 10 (5 in total)
+    for k := 6 to 10 do begin
+        NestedList.Add(k);
+        for i := 1 to 5 do
+            ListNumberOne.Add(NestedList);
+    end;
+
+    //Deep copy ListNumberOne to ListNumberTwo
+    foreach NestedList in ListNumberOne do
+        ListNumberTwo.Add(NestedList.GetRange(1, NestedList.Count()));
+
+    //Additional number to Nested List will be displayed in ListNumberOne only
+    NestedList.Add(11);
+
+    //Result is 6 and 5 because ListNumberTwo contain a new copy of nested list (it was same reference in shallow copy)
+    Message('NestedList1 count: %1\NestedList2 count: %2',
+        ListNumberOne.Get(1).Count(),
+        ListNumberTwo.Get(1).Count());
+end;
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+local procedure CollectUniqueCustomerNoFromSalesOrder()
+var
+    SalesHeader: Record "Sales Header";
+    ListOfCustomerNo: List of [Code[20]];
+    CustomerNo: Code[20];
+begin
+    SalesHeader.SetRange("Document Type", SalesHeader."Document Type"::Order);
+    if SalesHeader.FindSet() then
+        repeat
+            //Collect unique entries
+            if not ListOfCustomerNo.Contains(SalesHeader."Sell-to Customer No.") then
+                ListOfCustomerNo.Add(SalesHeader."Sell-to Customer No.");
+        until SalesHeader.Next() = 0;
+
+    //Read and show each enique Customer No.
+    foreach CustomerNo in ListOfCustomerNo do
+        message(CustomerNo);
+end;
