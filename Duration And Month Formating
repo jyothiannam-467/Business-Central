@@ -30,3 +30,37 @@ minutes = Duration / 60000
 hours = Duration / 3600000
 
 days = Duration / 86400000
+
+  procedure GetMonthText(Month: Integer): Text[5]
+    var
+        MonthText: Text[5];
+    begin
+        case Month of
+            1:
+                MonthText := 'Jan';
+            2:
+                MonthText := 'Feb';
+            3:
+                MonthText := 'Mar';
+            4:
+                MonthText := 'Apr';
+            5:
+                MonthText := 'May';
+            6:
+                MonthText := 'June';
+            7:
+                MonthText := 'July';
+            8:
+                MonthText := 'Aug';
+            9:
+                MonthText := 'Sep';
+            10:
+                MonthText := 'Oct';
+            11:
+                MonthText := 'Nov';
+            12:
+                MonthText := 'Dec';
+        end;
+
+        Exit(MonthText)
+    end;
