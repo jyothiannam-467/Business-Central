@@ -64,3 +64,18 @@ days = Duration / 86400000
 
         Exit(MonthText)
     end;
+
+ procedure GetLastFridayOfYear(Year: Integer): Date
+    var
+        LastDayOfYear: Date;
+        DayOfWeek: Integer;
+    begin
+        LastDayOfYear := DMY2Date(31, 12, Year);
+        DayOfWeek := Date2DWY(LastDayOfYear, 1);
+        if DayOfWeek >= 6 then
+            LastDayOfYear := LastDayOfYear - (DayOfWeek - 5)
+        else
+            LastDayOfYear := LastDayOfYear - (7 + DayOfWeek - 5);
+
+        Message('%1', LastDayOfYear);
+    end;
