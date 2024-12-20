@@ -1,3 +1,358 @@
+report 50003 "Agency Performance Report"
+{
+    ApplicationArea = All;
+    Caption = 'Agency Performance Report';
+    UsageCategory = ReportsAndAnalysis;
+    DefaultLayout = RDLC;
+    RDLCLayout = 'Reports\Layouts\AgencyPerformanceReport.rdl';
+    dataset
+    {
+        dataitem(Item; Item)
+        {
+            column(No_; "No.") { }
+            column(Description; Description) { }
+            //MTD Quty
+            column(MTDGrossQty; CalculateSalesQty('MTD', DocumentType::"Sales Invoice")) { }
+            column(MTDReturnQty; CalculateSalesQty('MTD', DocumentType::"Sales Return Receipt")) { }
+            column(MTDNetQty; CalculateNetSalesQty('MTD')) { }
+            column(MTDGrossQtyByAU; CalculateSalesQtyByDimension('MTD', DocumentType::"Sales Invoice", 'AUD')) { }
+            column(MTDReturnQtyByAU; CalculateSalesQtyByDimension('MTD', DocumentType::"Sales Return Receipt", 'AUD')) { }
+            column(MTDNetQtyByAU; CalculateNetSalesQtyByDimension('MTD', 'AUD')) { }
+            column(MTDGrossQtyByNZ; CalculateSalesQtyByDimension('MTD', DocumentType::"Sales Invoice", 'NZD')) { }
+            column(MTDReturnQtyByNZ; CalculateSalesQtyByDimension('MTD', DocumentType::"Sales Return Receipt", 'NZD')) { }
+            column(MTDNetQtyByNZ; CalculateNetSalesQtyByDimension('MTD', 'NZD')) { }
+            //MAT Qty
+            column(MATGrossQty; CalculateSalesQty('MAT', DocumentType::"Sales Invoice")) { }
+            column(MATReturnQty; CalculateSalesQty('MAT', DocumentType::"Sales Return Receipt")) { }
+            column(MATNetQty; CalculateNetSalesQty('MAT')) { }
+            column(MATGrossQtyByAU; CalculateSalesQtyByDimension('MAT', DocumentType::"Sales Invoice", 'AUD')) { }
+            column(MATReturnQtyByAU; CalculateSalesQtyByDimension('MAT', DocumentType::"Sales Return Receipt", 'AUD')) { }
+            column(MATNetQtyByAU; CalculateNetSalesQtyByDimension('MAT', 'AUD')) { }
+            column(MATGrossQtyByNZ; CalculateSalesQtyByDimension('MAT', DocumentType::"Sales Invoice", 'NZD')) { }
+            column(MATReturnQtyByNZ; CalculateSalesQtyByDimension('MAT', DocumentType::"Sales Return Receipt", 'NZD')) { }
+            column(MATNetQtyByNZ; CalculateNetSalesQtyByDimension('MAT', 'NZD')) { }
+            //LTD Qty
+            column(LTDGrossQty; CalculateSalesQty('LTD', DocumentType::"Sales Invoice")) { }
+            column(LTDReturnQty; CalculateSalesQty('LTD', DocumentType::"Sales Return Receipt")) { }
+            column(LTDNetQty; CalculateNetSalesQty('LTD')) { }
+            column(LTDGrossQtyByAU; CalculateSalesQtyByDimension('LTD', DocumentType::"Sales Invoice", 'AUD')) { }
+            column(LTDReturnQtyByAU; CalculateSalesQtyByDimension('LTD', DocumentType::"Sales Return Receipt", 'AUD')) { }
+            column(LTDNetQtyByAU; CalculateNetSalesQtyByDimension('LTD', 'AUD')) { }
+            column(LTDGrossQtyByNZ; CalculateSalesQtyByDimension('LTD', DocumentType::"Sales Invoice", 'NZD')) { }
+            column(LTDReturnQtyByNZ; CalculateSalesQtyByDimension('LTD', DocumentType::"Sales Return Receipt", 'NZD')) { }
+            column(LTDNetQtyByNZ; CalculateNetSalesQtyByDimension('LTD', 'NZD')) { }
+            //MTD AU$
+            column(MTDGrossAmount; CalculateSalesAmount('MTD', DocumentType::"Sales Invoice")) { }
+            column(MTDReturnAmount; CalculateSalesAmount('MTD', DocumentType::"Sales Return Receipt")) { }
+            column(MTDNetAmount; CalculateNetSalesAmount('MTD')) { }
+            column(MTDGrossAmountByAU; CalculateSalesAmountByDimension('MTD', DocumentType::"Sales Invoice", 'AUD')) { }
+            column(MTDReturnAmountByAU; CalculateSalesAmountByDimension('MTD', DocumentType::"Sales Return Receipt", 'AUD')) { }
+            column(MTDNetAmountByAU; CalculateNetSalesAmountByDimension('MTD', 'AUD')) { }
+            column(MTDGrossAmountByNZ; CalculateSalesAmountByDimension('MTD', DocumentType::"Sales Invoice", 'NZD')) { }
+            column(MTDReturnAmountByNZ; CalculateSalesAmountByDimension('MTD', DocumentType::"Sales Return Receipt", 'NZD')) { }
+            column(MTDNetAmountByNZ; CalculateNetSalesAmountByDimension('MTD', 'NZD')) { }
+            //MAT AU$
+            column(MATGrossAmount; CalculateSalesAmount('MAT', DocumentType::"Sales Invoice")) { }
+            column(MATReturnAmount; CalculateSalesAmount('MAT', DocumentType::"Sales Return Receipt")) { }
+            column(MATNetAmount; CalculateNetSalesAmount('MAT')) { }
+            column(MATGrossAmountByAU; CalculateSalesAmountByDimension('MAT', DocumentType::"Sales Invoice", 'AUD')) { }
+            column(MATReturnAmountByAU; CalculateSalesAmountByDimension('MAT', DocumentType::"Sales Return Receipt", 'AUD')) { }
+            column(MATNetAmountByAU; CalculateNetSalesAmountByDimension('MAT', 'AUD')) { }
+            column(MATGrossAmountByNZ; CalculateSalesAmountByDimension('MAT', DocumentType::"Sales Invoice", 'NZD')) { }
+            column(MATReturnAmountByNZ; CalculateSalesAmountByDimension('MAT', DocumentType::"Sales Return Receipt", 'NZD')) { }
+            column(MATNetAmountByNZ; CalculateNetSalesAmountByDimension('MAT', 'NZD')) { }
+            //LAT AU$
+            column(LTDGrossAmount; CalculateSalesAmount('LTD', DocumentType::"Sales Invoice")) { }
+            column(LTDReturnAmount; CalculateSalesAmount('LTD', DocumentType::"Sales Return Receipt")) { }
+            column(LTDNetAmount; CalculateNetSalesAmount('LTD')) { }
+            column(LTDGrossAmountByAU; CalculateSalesAmountByDimension('LTD', DocumentType::"Sales Invoice", 'AUD')) { }
+            column(LTDReturnAmountByAU; CalculateSalesAmountByDimension('LTD', DocumentType::"Sales Return Receipt", 'AUD')) { }
+            column(LTDNetAmountByAU; CalculateNetSalesAmountByDimension('LTD', 'AUD')) { }
+            column(LTDGrossAmountByNZ; CalculateSalesAmountByDimension('LTD', DocumentType::"Sales Invoice", 'NZD')) { }
+            column(LTDReturnAmountByNZ; CalculateSalesAmountByDimension('LTD', DocumentType::"Sales Return Receipt", 'NZD')) { }
+            column(LTDNetAmountByNZ; CalculateNetSalesAmountByDimension('LTD', 'NZD')) { }
+            column(LTDPurchaseReceipts; GetLTDPurchaseReceipts()) { }
+        }
+    }
+    requestpage
+    {
+        layout
+        {
+            area(Content)
+            {
+                group(GroupName)
+                {
+                    field(StartDate; StartDate) { Caption = 'Start Date'; }
+                    field(EndDate; EndDate) { Caption = 'End Date'; }
+                }
+            }
+        }
+        actions
+        {
+            area(Processing)
+            {
+            }
+        }
+    }
+    labels
+    {
+        Title = 'Agency Performance Report';
+        IL3 = 'IL3';
+        IL4_Imprint_Code_and_Description = 'IL4 - Imprint Code and Description';
+        IL3_Supplying_Publisher_Description = 'IL3 - Supplying Publisher Description';
+        ISBN = 'ISBN';
+        Book_Title = 'Book Title';
+        Author = 'Author';
+        Publication_Price_AU = 'Publication Price AU';
+        Publication_Date = 'Publication Date';
+        MTD_Qty = 'MTD Qty';
+        MAT_Qty = 'MAT Qty';
+        LTD_Qty = 'LTD Qty';
+        TOTAL_Gross_Sales_Qty = 'TOTAL Gross Sales Qty';
+        TOTAL_Returns_Qty = 'TOTAL Returns Qty';
+        TOTAL_Net_Sales_Qty = 'TOTAL Net Sales Qty';
+        AU_Gross_Sales_Qty = 'AU Gross Sales Qty';
+        AU_Return_Qty = 'AU Return Qty';
+        AU_Net_Sales_Qty = 'AU Net Sales Qty';
+        NZ_Gross_Sales_Qty = 'NZ Gross Sales Qty';
+        NZ_Return_Qty = 'NZ Return Qty';
+        NZ_Net_Sales_Qty = 'NZ Net Sales Qty';
+        MTD_Amt = 'MTD AU$';
+        MAT_Amt = 'MAT AU$';
+        LTD_Amt = 'LTD AU$';
+        AU_TOTAL_Gross_Sales = 'TOTAL Gross Sales AU$';
+        AU_TOTAL_Returns = 'TOTAL Returns AU$';
+        AU_TOTAL_Net_Sales = 'TOTAL Net Sales AU$';
+        AU_Gross_Sales = 'AU Gross Sales AU$';
+        AU_Return = 'AU Return AU$';
+        AU_Net_Sales = 'AU Net Sales AU$';
+        NZ_Gross_Sales = 'NZ Gross Sales AU$';
+        NZ_Return = 'NZ Return AU$';
+        NZ_Net_Sales = 'NZ Net Sales AU$';
+        LTD_Purchase_Receipts = 'LTD Purchase Receipts';
+    }
+
+    var
+        StartDate, EndDate : Date;
+        GeneralLedgerSetup: Record "General Ledger Setup";
+        DimensionSetEntry: Record "Dimension Set Entry";
+        DocumentType: Enum "Item Ledger Document Type";
+        ILE: Record "Item Ledger Entry";
+
+    procedure MonthToDate(Var StartDate_Loc: Date; Var EndDate_Loc: Date)
+    begin
+        StartDate_Loc := CalcDate('<-CM>', StartDate);
+        EndDate_Loc := CalcDate('<+CM>', StartDate);
+    end;
+
+    procedure MovingAnnualTotal(Var StartDate_Loc: Date; Var EndDate_Loc: Date)
+    begin
+        EndDate_Loc := EndDate;
+        StartDate_Loc := CalcDate('<-12M>', EndDate);
+    end;
+
+    procedure CalculateSalesQty(PeriodType: Text; DocumentType: Enum "Item Ledger Document Type"): Decimal
+    var
+        SalesQty: Decimal;
+        StartDate_Loc, EndDate_Loc : Date;
+    begin
+        if PeriodType = 'MTD' then
+            MonthToDate(StartDate_Loc, EndDate_Loc)
+        else if PeriodType = 'MAT' then
+            MovingAnnualTotal(StartDate_Loc, EndDate_Loc)
+        else
+            if PeriodType = 'LTD' then begin
+                StartDate_Loc := 0D;
+                EndDate_Loc := Today;
+            end;
+
+        SalesQty := 0;
+        ILE.Reset();
+        ILE.SetRange("Posting Date", StartDate_Loc, EndDate_Loc);
+        ILE.SetRange("Entry Type", ILE."Entry Type"::Sale);
+        ILE.SetRange("Document Type", DocumentType);
+        ILE.SetRange("Item No.", Item."No.");
+        ILE.CalcSums(Quantity);
+        SalesQty := ILE.Quantity;
+
+        exit(SalesQty);
+    end;
+
+    procedure CalculateNetSalesQty(PeriodType: Text): Decimal
+    var
+        GrossQty, ReturnQty : Decimal;
+    begin
+        GrossQty := CalculateSalesQty(PeriodType, DocumentType::"Sales Invoice");
+        ReturnQty := CalculateSalesQty(PeriodType, DocumentType::"Sales Return Receipt");
+
+        exit(GrossQty - ReturnQty);
+    end;
+
+    local procedure CalculateSalesQtyByDimension(PeriodType: Text;  DocumentType: Enum "Item Ledger Document Type"; DimensionCode: Code[20]): Decimal
+    var
+        QtyByDimension: Decimal;
+        DimSetID: Integer;
+        StartDate_Loc, EndDate_Loc : Date;
+    begin
+        if PeriodType = 'MTD' then
+            MonthToDate(StartDate_Loc, EndDate_Loc)
+        else if PeriodType = 'MAT' then
+            MovingAnnualTotal(StartDate_Loc, EndDate_Loc)
+        else
+            if PeriodType = 'LTD' then begin
+                StartDate_Loc := 0D;
+                EndDate_Loc := Today;
+            end;
+
+        GeneralLedgerSetup.Get();
+
+        QtyByDimension := 0;
+
+        DimensionSetEntry.Reset();
+        DimensionSetEntry.SetRange("Dimension Code", GeneralLedgerSetup."Shortcut Dimension 4 Code");
+        DimensionSetEntry.SetRange("Dimension Value Code", DimensionCode);
+        if DimensionSetEntry.FindSet() then
+            DimSetID := DimensionSetEntry."Dimension Set ID";
+
+        ILE.Reset();
+        ILE.SetRange("Posting Date", StartDate_Loc, EndDate_Loc);
+        ILE.SetRange("Entry Type", ILE."Entry Type"::Sale);
+        ILE.SetRange("Document Type", DocumentType);
+        ILE.SetRange("Item No.", Item."No.");
+        ILE.SetRange("Dimension Set ID", DimSetID);
+        ILE.CalcSums(Quantity);
+        QtyByDimension := ILE.Quantity;
+    end;
+
+    local procedure CalculateNetSalesQtyByDimension(PeriodType: Text; DimensionCode: Code[20]): Decimal
+    var
+        GrossQtyByDimension, ReturnQtyByDimension : Decimal;
+    begin
+        GrossQtyByDimension := 0;
+        ReturnQtyByDimension := 0;
+
+
+        GrossQtyByDimension := CalculateSalesQtyByDimension(PeriodType, DocumentType::"Sales Invoice", DimensionCode);
+        ReturnQtyByDimension := CalculateSalesQtyByDimension(PeriodType, DocumentType::"Sales Return Receipt", DimensionCode);
+
+        exit(GrossQtyByDimension - ReturnQtyByDimension);
+    end;
+
+    procedure CalculateSalesAmount(PeriodType: Text; DocumentType: Enum "Item Ledger Document Type"): Decimal
+    var
+        SalesAmount: Decimal;
+        StartDate_Loc, EndDate_Loc : Date;
+    begin
+        if PeriodType = 'MTD' then
+            MonthToDate(StartDate_Loc, EndDate_Loc)
+        else if PeriodType = 'MAT' then
+            MovingAnnualTotal(StartDate_Loc, EndDate_Loc)
+        else
+            if PeriodType = 'LTD' then begin
+                StartDate_Loc := 0D;
+                EndDate_Loc := Today;
+            end;
+
+        SalesAmount := 0;
+        ILE.Reset();
+        ILE.SetRange("Posting Date", StartDate_Loc, EndDate_Loc);
+        ILE.SetRange("Entry Type", ILE."Entry Type"::Sale);
+        ILE.SetRange("Document Type", DocumentType);
+        ILE.SetRange("Item No.", Item."No.");
+        if ILE.FindSet() then
+            repeat
+                ILE.CalcFields("Sales Amount (Actual)");
+                SalesAmount += ILE."Sales Amount (Actual)";
+            until ILE.Next() = 0;
+        exit(SalesAmount);
+    end;
+
+    procedure CalculateNetSalesAmount(PeriodType: Text): Decimal
+    var
+        GrossAmount, ReturnAmount : Decimal;
+    begin
+        GrossAmount := CalculateSalesAmount(PeriodType, DocumentType::"Sales Invoice");
+        ReturnAmount := CalculateSalesAmount(PeriodType, DocumentType::"Sales Return Receipt");
+
+        exit(GrossAmount - ReturnAmount);
+    end;
+
+    local procedure CalculateSalesAmountByDimension(PeriodType: Text;
+  DocumentType: Enum "Item Ledger Document Type"; DimensionCode: Code[20]): Decimal
+    var
+        AmountByDimension: Decimal;
+        StartDate_Loc, EndDate_Loc : Date;
+        DimSetID: Integer;
+    begin
+        if PeriodType = 'MTD' then
+            MonthToDate(StartDate_Loc, EndDate_Loc)
+        else if PeriodType = 'MAT' then
+            MovingAnnualTotal(StartDate_Loc, EndDate_Loc)
+        else
+            if PeriodType = 'LTD' then begin
+                StartDate_Loc := 0D;
+                EndDate_Loc := Today;
+            end;
+
+        GeneralLedgerSetup.Get();
+
+        AmountByDimension := 0;
+
+        DimensionSetEntry.Reset();
+        DimensionSetEntry.SetRange("Dimension Code", GeneralLedgerSetup."Shortcut Dimension 4 Code");
+        DimensionSetEntry.SetRange("Dimension Value Code", DimensionCode);
+        if DimensionSetEntry.FindSet() then
+            DimSetID := DimensionSetEntry."Dimension Set ID";
+
+        ILE.Reset();
+        ILE.SetRange("Posting Date", StartDate_Loc, EndDate_Loc);
+        ILE.SetRange("Entry Type", ILE."Entry Type"::Sale);
+        ILE.SetRange("Document Type", DocumentType);
+        ILE.SetRange("Item No.", Item."No.");
+        ILE.SetRange("Dimension Set ID", DimSetID);
+        if ILE.FindSet() then
+            repeat
+                ILE.CalcFields("Sales Amount (Actual)");
+                AmountByDimension += ILE."Sales Amount (Actual)";
+            until ILE.Next() = 0;
+        exit(AmountByDimension);
+    end;
+
+    local procedure CalculateNetSalesAmountByDimension(PeriodType: Text; DimensionCode: Code[20]): Decimal
+    var
+        GrossAmountByDimension, ReturnAmountByDimension : Decimal;
+    begin
+        GrossAmountByDimension := 0;
+        ReturnAmountByDimension := 0;
+
+
+        GrossAmountByDimension := CalculateSalesAmountByDimension(PeriodType, DocumentType::"Sales Invoice", DimensionCode);
+        ReturnAmountByDimension := CalculateSalesAmountByDimension(PeriodType, DocumentType::"Sales Return Receipt", DimensionCode);
+
+        exit(GrossAmountByDimension - ReturnAmountByDimension);
+    end;
+
+    procedure GetLTDPurchaseReceipts(): Decimal
+    var
+        TotalQuantity: Decimal;
+    begin
+        TotalQuantity := 0;
+
+        ILE.Reset();
+        ILE.SetRange("Item No.", Item."No.");
+        ILE.SetRange("Entry Type", ILE."Entry Type"::Purchase);
+        ILE.SetRange("Document Type", ILE."Document Type"::"Purchase Receipt");
+        if ILE.FindSet() then
+            repeat
+                TotalQuantity += ILE.Quantity;
+            until ILE.Next() = 0;
+
+        exit(TotalQuantity);
+    end;
+
+}
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Report 50310 "Patient Profile "
 {
     UsageCategory = ReportsAndAnalysis;
