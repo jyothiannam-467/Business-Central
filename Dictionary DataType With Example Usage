@@ -1,6 +1,104 @@
 ---------------------------------------------------------------------------------------------------DICTIONARY--------------------------------------------------------------------------------------------------------------------------
 
 A dictionary is a key-value unordered collection. Each key must be unique
+-----------------------------------------------------------------------------------------
+
+codeunit 50138 "SKU Creation Automation"
+{
+    trigger OnRun()
+    begin
+        CreateSKUsForAllVariantsAndLocations();
+    end;
+
+    var
+        StockkeepingUnit: Record "Stockkeeping Unit";
+
+    procedure CreateSKUsForAllVariantsAndLocations()
+    var
+        ItemRec: Record Item;
+        ILERec: Record "Item Ledger Entry";
+        LocationsAndVariantRec: Record LocationsAndVariants;
+        LocationCode, VariantCode : Code[10];
+        ItemNo: Code[20];
+        LocationList, VariantList : List of [Code[10]];
+        ItemVariant: Dictionary of [Code[20], List of [Code[10]]];
+    begin
+        //Intializing Variables
+        LocationsAndVariantRec.DeleteAll();
+        Clear(ItemVariant);
+        Clear(LocationList);
+
+        ILERec.Reset();
+        ILERec.SetRange("Posting Date", CalcDate('<-6M>', Today), Today);
+        ILERec.SetRange("Document Type", ILERec."Document Type"::"Sales Shipment");
+        ILERec.SetRange("Document Type", ILERec."Document Type"::"Purchase Receipt");
+        ILERec.SetFilter("Location Code", '<>%1', '');
+        ILERec.SetFilter("Variant Code", '<>%1', '');
+        if ILERec.FindSet() then
+            repeat
+                if not LocationsAndVariantRec.Get(ILERec."Item No.", ILERec."Location Code", ILERec."Variant Code") then begin
+
+                    LocationsAndVariantRec.Init();
+                    LocationsAndVariantRec."Item No." := ILERec."Item No.";
+                    LocationsAndVariantRec."Location Code" := ILERec."Location Code";
+                    LocationsAndVariantRec."Variant Code" := ILERec."Variant Code";
+                    LocationsAndVariantRec.Insert();
+
+                    if not ItemVariant.ContainsKey(ILERec."Item No.") then begin
+                        Clear(VariantList);
+                        VariantList.Add(ILERec."Variant Code");
+                        ItemVariant.Add(ILERec."Item No.", VariantList)
+                    End
+                    Else begin
+                        Clear(VariantList);
+                        VariantList := ItemVariant.Get(ILERec."Item No.");
+                        if not VariantList.Contains(ILERec."Variant Code") then
+                            VariantList.Add(ILERec."Variant Code");
+                        ItemVariant.Set(ILERec."Item No.", VariantList);
+                    end;
+
+                    if not LocationList.Contains(ILERec."Location Code") then
+                        LocationList.Add(ILERec."Location Code");
+                end;
+            until ILERec.Next() = 0;
+
+        foreach Itemno in ItemVariant.Keys() do begin
+            if ItemRec.Get(ItemNo) then begin
+                VariantList := ItemVariant.Get(ItemNo);
+                foreach VariantCode in VariantList do begin
+                    foreach LocationCode in LocationList do begin
+                        CreateSKUIfRequired(ItemRec, LocationCode, VariantCode);
+                    end;
+                end;
+            end;
+        End;
+        Message('Stock Keeping Units are created');
+    end;
+
+    procedure CreateSKUIfRequired(var Item2: Record Item; LocationCode: Code[10]; VariantCode: Code[10])
+    begin
+        if not StockkeepingUnit.Get(LocationCode, Item2."No.", VariantCode) then
+            CreateSKU(Item2, LocationCode, VariantCode);
+    end;
+
+    procedure CreateSKU(var Item2: Record Item; LocationCode: Code[10]; VariantCode: Code[10])
+    begin
+        StockkeepingUnit.Init();
+        StockkeepingUnit."Item No." := Item2."No.";
+        StockkeepingUnit."Location Code" := LocationCode;
+        StockkeepingUnit."Variant Code" := VariantCode;
+        StockkeepingUnit.CopyFromItem(Item2);
+        StockkeepingUnit."Last Date Modified" := WorkDate();
+        StockkeepingUnit."Special Equipment Code" := Item2."Special Equipment Code";
+        StockkeepingUnit."Put-away Template Code" := Item2."Put-away Template Code";
+        StockkeepingUnit.SetHideValidationDialog(true);
+        StockkeepingUnit.Validate("Phys Invt Counting Period Code", Item2."Phys Invt Counting Period Code");
+        StockkeepingUnit."Put-away Unit of Measure Code" := Item2."Put-away Unit of Measure Code";
+        StockkeepingUnit."Use Cross-Docking" := Item2."Use Cross-Docking";
+        StockkeepingUnit.Insert(true);
+    end;
+}
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 local procedure CollectUniqueCustomerNoAndCustNameFromSalesOrder()
 var
