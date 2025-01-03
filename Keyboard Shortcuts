@@ -1,0 +1,22 @@
+Alt+Q            : Open Tell Me OR Search data
+F5               : Refresh data (fast)
+Ctrl+Alt+F1      : Inspect page and data
+Tab and Shift+Tab: Move focus to the next/previous
+Tab              : Move focus to the next control or element on a page, such as actions, buttons, fields, or list headings.
+Shift+Tab        : Move focus to the previous control or element on a page, such as actions, buttons, fields, or list headings.
+Enter            : Confirm the value in the current field and go to the next Quick Entry field.
+Shift+Enter      : Confirm the value in the current field and go to the previous Quick Entry field.
+F8               : Copy from cell above
+Crtl+O           : Switch companies across environments
+F3               : Search
+Alt+F3           : Filter to this field
+Alt+T            : Open the My Settings page
+F7               : Open statistics.
+F9               : Post, issue, register, or reverse document.
+Alt+D            : Open the dimension set entries.
+Ctrl+F7          : Open ledger entries, logs entries, cost entries, and so on.
+Ctrl+F12         : Switch between slim/wide page
+Alt+F2           : Show and hide the FactBox pane.
+Shift+Alt+F2     : Switch between FactBox areas
+Alt+F7           : Sort by current column
+Alt              : To use access keys on a page, first select the Alt key to display key tips, which are letters in small boxes next to the actions in the action bar and navigation menu
