@@ -1,0 +1,39 @@
+ action(RemoveVendorRecordRestrictions)
+ {
+   Visible = false;
+   trigger OnAction()
+   var
+       Vendor: Record Vendor;
+       RecordRestrictionMgt: Codeunit "Record Restriction Mgt.";
+   begin
+        Vendor.Reset();
+        Vendor.SetRange("Approval Status", Vendor."Approval Status"::"Pending for Approval");
+        if Vendor.FindSet() then
+        repeat
+           RecordRestrictionMgt.AllowRecordUsage(Vendor);
+           DeleteApprovalEntries(Vendor.RecordId);
+           Vendor."Approval Status" := Vendor."Approval Status"::Open;
+           Vendor.Modify();
+      until Vendor.Next() = 0;
+  end;
+}
+ procedure DeleteApprovalEntries(RecordIDToApprove: RecordID)
+    var
+        ApprovalEntry: Record "Approval Entry";
+    begin
+        ApprovalEntry.SetRange("Table ID", RecordIDToApprove.TableNo);
+        ApprovalEntry.SetRange("Record ID to Approve", RecordIDToApprove);
+        if not ApprovalEntry.IsEmpty() then
+            ApprovalEntry.DeleteAll(true);
+        DeleteApprovalCommentLines(RecordIDToApprove);
+    end;
+
+    procedure DeleteApprovalCommentLines(RecordIDToApprove: RecordID)
+    var
+        ApprovalCommentLine: Record "Approval Comment Line";
+    begin
+        ApprovalCommentLine.SetRange("Table ID", RecordIDToApprove.TableNo);
+        ApprovalCommentLine.SetRange("Record ID to Approve", RecordIDToApprove);
+        if not ApprovalCommentLine.IsEmpty() then
+            ApprovalCommentLine.DeleteAll(true);
+    end;
