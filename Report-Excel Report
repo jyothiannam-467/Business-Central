@@ -1,3 +1,177 @@
+ Report 50003 "REORDER LEVEL REPORT"
+{
+    Caption = 'REORDER LEVEL REPORT';
+    UsageCategory = ReportsAndAnalysis;
+    ProcessingOnly = true;
+    ApplicationArea = all;
+    dataset
+    {
+    }
+
+    requestpage
+    {
+        layout
+        {
+
+        }
+        actions
+        {
+
+        }
+    }
+    labels
+    {
+
+    }
+    trigger OnPreReport()
+    begin
+        CompanyInfo.Get();
+        CreateExcelHeader();
+        ProcessData();
+    end;
+
+    trigger OnPostReport();
+    begin
+        TempExcelBuffer.CreateNewBook(ReportFileName);
+        TempExcelBuffer.WriteSheet(ReportFileName, CompanyName, UserId);
+        TempExcelBuffer.CloseBook();
+        TempExcelBuffer.SetFriendlyFilename(ReportFileName);
+        TempExcelBuffer.OpenExcel();
+    end;
+
+    local procedure EnterCell(RowNo: Integer; ColumnNo: Integer; CellValue: Variant; Bold: Boolean; Italic: Boolean; UnderLine: Boolean; NumberFormat: Text[30]; cellTypeP: Option Number,Text,Date,Time)
+    begin
+        TempExcelBuffer.Init;
+        TempExcelBuffer.Validate("Row No.", RowNo);
+        TempExcelBuffer.Validate("Column No.", ColumnNo);
+        TempExcelBuffer."Cell Value as Text" := Format(CellValue);
+        TempExcelBuffer.Formula := '';
+        TempExcelBuffer.Bold := Bold;
+        TempExcelBuffer.Italic := Italic;
+        TempExcelBuffer.Underline := UnderLine;
+        TempExcelBuffer.NumberFormat := NumberFormat;
+        TempExcelBuffer."Cell Type" := cellTypeP;
+        TempExcelBuffer.Insert;
+    end;
+
+    local procedure CreateExcelHeader()
+    begin
+        EnterCell(1, 1, CompanyInfo.Name, true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(2, 1, 'REORDER LEVEL REPORT', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 1, 'Item No.', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 2, 'Description', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 3, 'Variant Group Type', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 4, 'Outer Diameter', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 5, 'Thickness', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 6, 'Pending Sales Order', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 7, 'Pending Purchase Order', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 8, 'Qty On Hand', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 9, 'Reorder level', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 10, 'Quantity To Order', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(3, 10, 'Status', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+    end;
+
+    local procedure ProcessData()
+    var
+        ILEQty, RemainingILEQty, QtyToOrder, SalesQty, PurchaseQty, OuterDiaXRec, ThicknessXRec, ReOrderLevl : Decimal;
+        ILERec: Record "Item Ledger Entry";
+        ItemRec: Record Item;
+        VariantGroupTypeXrec: Option " ",Flat,Round,Ring;
+        RowNo: Integer;
+        ItemNoXRec: Code[20];
+        Description: Text[100];
+    begin
+        Rowno := 4;
+        ILERec.Reset();
+        ILERec.SetCurrentKey("Item No.", "Variant Group Type", Thickness, "Outer Diameter");
+        if ILERec.FindSet() then
+            repeat
+                if (ItemNoXRec <> ILERec."Item No.") or (VariantGroupTypeXrec <> ILERec."Variant Group Type") or (ThicknessXRec <> ILERec.Thickness)
+                or (OuterDiaXRec <> ILERec."Outer Diameter") then begin
+                    Clear(ItemNoXRec);
+                    Clear(Description);
+                    Clear(VariantGroupTypeXrec);
+                    Clear(OuterDiaXRec);
+                    Clear(ThicknessXRec);
+                    ItemNoXRec := ILERec."Item No.";
+                    if ItemRec.Get(ItemNoXRec) then
+                        Description := ItemRec.Description;
+                    VariantGroupTypeXrec := ILERec."Variant Group Type";
+                    OuterDiaXRec := ILERec."Outer Diameter";
+                    ThicknessXRec := ILERec.Thickness;
+
+                    ProcessILEQty(ItemNoXRec, VariantGroupTypeXrec, ThicknessXRec, OuterDiaXRec, ILEQty, RemainingILEQty);
+                    SalesQty := ProcessSalesQty(ItemNoXRec, VariantGroupTypeXrec, ThicknessXRec, OuterDiaXRec);
+                    PurchaseQty := ProcessSalesQty(ItemNoXRec, VariantGroupTypeXrec, ThicknessXRec, OuterDiaXRec);
+                    ReOrderLevl := (ILEQty / 6) * 4;
+                    QtyToOrder := (SalesQty + ReOrderLevl) - (PurchaseQty + RemainingILEQty);
+
+                    Entercell(RowNo, 1, ItemNoXRec, false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                    Entercell(RowNo, 2, Description, false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                    Entercell(RowNo, 3, VariantGroupTypeXrec, false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                    EnterCell(RowNo, 4, OuterDiaXRec, false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                    EnterCell(RowNo, 5, ThicknessXRec, false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                    EnterCell(RowNo, 6, SalesQty, false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                    EnterCell(RowNo, 7, PurchaseQty, false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                    EnterCell(RowNo, 8, RemainingILEQty, false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                    EnterCell(RowNo, 9, ILEQty, false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                    EnterCell(RowNo, 10, QtyToOrder, false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+
+                    RowNo := RowNo + 1;
+                end;
+            until ILERec.Next() = 0;
+    end;
+
+    local procedure ProcessILEQty(ItemNo: Code[20]; VariantGroupType: Option " ",Flat,Round,Ring; Thickness: Decimal; OuterDia: Decimal; var Qty: Decimal; Var RemainingQty: Decimal)
+    var
+        ILERec: Record "Item Ledger Entry";
+    begin
+        Qty := 0;
+        RemainingQty := 0;
+
+        ILERec.Reset();
+        ILERec.SetRange("Item No.", ItemNo);
+        ILERec.SetRange("Variant Group Type", VariantGroupType);
+        ILERec.SetRange(Thickness, Thickness);
+        ILERec.SetRange("Outer Diameter", OuterDia);
+        ILERec.CalcSums(Quantity);
+        Qty := ILERec.Quantity;
+        ILERec.CalcSums("Remaining Quantity");
+        RemainingQty := ILERec."Remaining Quantity";
+    end;
+
+    local procedure ProcessSalesQty(ItemNo: Code[20]; VariantGroupType: Option " ",Flat,Round,Ring; Thickness: Decimal; OuterDia: Decimal): Decimal
+    var
+        SaleLineRec: Record "Sales Line";
+    begin
+        SaleLineRec.Reset();
+        SaleLineRec.SetRange("No.", ItemNo);
+        SaleLineRec.SetRange("Variant Group Type", VariantGroupType);
+        SaleLineRec.SetRange(Thickness, Thickness);
+        SaleLineRec.SetRange("Outer Diameter", OuterDia);
+        SaleLineRec.CalcSums("Outstanding Quantity");
+        exit(SaleLineRec."Outstanding Quantity");
+    end;
+
+    local procedure ProcessPurchaseQty(ItemNo: Code[20]; VariantGroupType: Option " ",Flat,Round,Ring; Thickness: Decimal; OuterDia: Decimal): Decimal
+    var
+        PurchaseLineRec: Record "Sales Line";
+    begin
+        PurchaseLineRec.Reset();
+        PurchaseLineRec.SetRange("No.", ItemNo);
+        PurchaseLineRec.SetRange("Variant Group Type", VariantGroupType);
+        PurchaseLineRec.SetRange(Thickness, Thickness);
+        PurchaseLineRec.SetRange("Outer Diameter", OuterDia);
+        PurchaseLineRec.CalcSums("Outstanding Quantity");
+        exit(PurchaseLineRec."Outstanding Quantity");
+    end;
+
+    var
+        TempExcelBuffer: Record "Excel Buffer" temporary;
+        ReportFileName: Label 'REORDER LEVEL REPORT';
+        CompanyInfo: Record "Company Information";
+}  
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 report 50003 "Agency Performance Report"
 {
     ApplicationArea = All;
