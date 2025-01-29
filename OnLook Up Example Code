@@ -1,3 +1,47 @@
+  procedure SetIL3SupplyingPublisherSelectionFilter(var ConsigneeField: Code[2048])
+    var
+        SupplyingPublisher: Record "Supplying Publisher";
+        SupplyingPublisherList: Page "Supplying Publisher";
+        stringvariable: Code[2048];
+    begin
+        Clear(stringvariable);
+        SupplyingPublisher.Reset();
+        SupplyingPublisherList.SetTableView(SupplyingPublisher);
+        SupplyingPublisherList.LookupMode(true);
+        if SupplyingPublisherList.RunModal() = Action::LookupOK then begin
+            SupplyingPublisherList.SetSelectionFilter(SupplyingPublisher);
+            SupplyingPublisherList.GetRecord(SupplyingPublisher);
+            if SupplyingPublisher.FindSet() then
+                repeat
+                    stringvariable += SupplyingPublisher.Code + '|';
+                until SupplyingPublisher.Next() = 0;
+            ConsigneeField := DelChr(stringvariable, '>', '|');
+        end;
+    end;
+
+    local procedure SetGLAccountSelectionFilter(var ConsigneeField: Code[2048])
+    var
+        GLAccount: Record "G/L Account";
+        GLAccountList: Page "G/L Account List";
+        stringvariable: Code[2048];
+    begin
+        Clear(stringvariable);
+        GLAccount.Reset();
+        GLAccount.SetRange("Account Type", GLAccount."Account Type"::Posting);
+        GLAccountList.SetTableView(GLAccount);
+        GLAccountList.LookupMode(true);
+        if GLAccountList.RunModal() = Action::LookupOK then begin
+            GLAccountList.SetSelectionFilter(GLAccount);
+            GLAccountList.GetRecord(GLAccount);
+            if GLAccount.FindSet() then
+                repeat
+                    stringvariable += GLAccount."No." + '|';
+                until GLAccount.Next() = 0;
+            ConsigneeField := DelChr(stringvariable, '>', '|');
+        end;
+    End;
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  MachineCenter.Reset();
                     MachineCentreList.LookupMode(true);
                     if MachineCentreList.RunModal() = Action::LookupOK then begin
