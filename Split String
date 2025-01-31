@@ -1,0 +1,14 @@
+  local procedure SplitString(InputString: Text; Delimiter: Text): List of [Text]
+    var
+        Result: List of [Text];
+        Position: Integer;
+    begin
+        while StrPos(InputString, Delimiter) > 0 do begin
+            Position := StrPos(InputString, Delimiter);
+            Result.Add(CopyStr(InputString, 1, Position - 1));
+            InputString := DelStr(InputString, 1, Position);
+        end;
+        if InputString <> '' then
+            Result.Add(InputString);
+        exit(Result);
+    end;
