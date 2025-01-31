@@ -12,3 +12,16 @@
             Result.Add(InputString);
         exit(Result);
     end;
+
+-----------------------------------------------------------------------------------------------------
+
+ local procedure GetValueFromDetails(Details: Text; Index: Integer): Text
+    var
+        Values: List of [Text];
+    begin
+        Values := SplitString(Details, '|');
+        if Values.Count >= Index then
+            exit(Values.Get(Index))
+        else
+            exit('');
+    end;
