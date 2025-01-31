@@ -1,0 +1,149 @@
+codeunit 50081 EmailOrderConfirmation
+{
+    trigger OnRun()
+    begin
+        SendOrderConfirmationEmail();
+    end;
+
+    procedure SendOrderConfirmationEmail()
+    var
+        ProductionOrder: Record "Production Order";
+        ProductionOrderLine: Record "Prod. Order Line";
+        OrderCommentLine: Record "Prod. Order Comment Line";
+        Customer: Record Customer;
+        Salesperson: Record "Salesperson/Purchaser";
+        CompanyInfo: Record "Company Information";
+        EmailMessage: Codeunit "Email Message";
+        EmailHandler: Codeunit Email;
+        OrderDate: Date;
+        SalespersonData: Dictionary of [Text, Text];
+        SalespersonKeys: List of [Text];
+        EmailRecipients, EmailList, EmailTo, EmailBCC, EmailCC : List of [Text];
+        SalespersonEmail, SalespersonPhone, SalespersonCode, ToRecipients, BCCRecipients, EmailBody, EmailSubject, Delimiter, SalesPersonDetails, keyvalue : Text;
+        i: Integer;
+    begin
+        Clear(SalespersonData);
+        Clear(SalespersonKeys);
+
+        CompanyInfo.Get();
+        ProductionOrder.Reset();
+        ProductionOrder.SetRange(Status, ProductionOrder.Status::Released);
+        ProductionOrder.SetRange(Comment, true);
+        if ProductionOrder.FindSet() then
+            repeat
+                OrderCommentLine.Reset();
+                OrderCommentLine.SetRange(Status, OrderCommentLine.Status::Released);
+                OrderCommentLine.SetRange("Prod. Order No.", ProductionOrder."No.");
+                if OrderCommentLine.FindLast() then
+                    OrderDate := OrderCommentLine.Date;
+
+                ProductionOrderLine.Reset();
+                ProductionOrderLine.SetRange(Status, ProductionOrderLine.Status::Released);
+                ProductionOrderLine.SetRange("Prod. Order No.", ProductionOrder."No.");
+                if ProductionOrderLine.FindSet() then
+                    repeat
+                        Clear(EmailList);
+                        Clear(ToRecipients);
+                        Clear(BCCRecipients);
+                        Clear(SalespersonEmail);
+                        Clear(SalespersonPhone);
+                        Clear(SalesPersonDetails);
+
+                        if Customer.Get(ProductionOrderLine."Customer No.") then begin
+                            if Salesperson.Get(Customer."Salesperson Code") then begin
+                                Delimiter := ';';
+                                EmailList := SplitString(Customer."E-Mail", Delimiter);
+
+                                if EmailList.Count > 0 then begin
+                                    ToRecipients := EmailList.Get(1);
+                                    for i := 2 to EmailList.Count do begin
+                                        if BCCRecipients = '' then
+                                            BCCRecipients := EmailList.Get(i)
+                                        else
+                                            BCCRecipients += ';' + EmailList.Get(i);
+                                    end;
+                                end;
+
+                                SalespersonEmail := Salesperson."E-Mail";
+                                SalespersonPhone := Salesperson."Phone No.";
+                                SalesPersonDetails := Format(OrderDate) + '|' + ToRecipients + '|' + BCCRecipients + '|' + SalesPersonEmail + '|' + SalesPersonPhone;
+                                if not SalespersonData.ContainsKey(Salesperson.Code) then begin
+                                    SalespersonData.Add(Salesperson.Code, SalesPersonDetails);
+                                    SalespersonKeys.Add(Salesperson.Code);
+                                end;
+                            end;
+                        end;
+                    until ProductionOrderLine.Next() = 0;
+            until ProductionOrder.Next() = 0;
+
+        Clear(OrderDate);
+        Clear(ToRecipients);
+        Clear(BCCRecipients);
+        Clear(SalespersonEmail);
+        Clear(SalespersonPhone);
+
+        foreach SalespersonCode in SalespersonKeys do begin
+            if SalespersonData.Get(SalespersonCode, keyvalue) then begin
+                OrderDate := EvaluateDate(GetValueFromDetails(keyvalue, 1));
+                ToRecipients := GetValueFromDetails(keyvalue, 2);
+                BCCRecipients := GetValueFromDetails(keyvalue, 3);
+                SalespersonEmail := GetValueFromDetails(keyvalue, 4);
+                SalespersonPhone := GetValueFromDetails(keyvalue, 5);
+
+                EmailSubject := 'Order Confirmation';
+                EmailBody :=
+                  'Dear Sir/Madam,' + '<br><br>' +
+                  'This is an auto-generated email, please do not reply to the same.' + '<br><br>' +
+                  'We are in receipt of your order (date: ' + Format(OrderDate) + ') and thank you for the same. Kindly find enclosed the order confirmation. Your order has been taken for processing and it will be ready on the specified date.' + '<br><br>' +
+                  'In case of any clarification or to know the status of your order, please contact ' + SalespersonCode + '.' + '<br>' +
+                  'You can reach them at phone number ' + SalespersonPhone + ' and email ID ' + SalespersonEmail + '.' + '<br><br>' +
+                  'Thank you for your valued business.' + '<br><br>' +
+                  'Your Company Name' + '<br>' +
+                  'Authorised Signatory';
+
+                Evaluate(EmailTo, ToRecipients);
+                Evaluate(EmailBCC, BCCRecipients);
+
+                EmailMessage.Create(EmailTo, EmailSubject, '', true, EmailCC, EmailBCC);
+                EmailMessage.SetBodyHTMLFormatted(true);
+                EmailMessage.AppendToBody(EmailBody);
+                EmailHandler.Send(EmailMessage, Enum::"Email Scenario"::Default);
+            end;
+        end;
+    end;
+
+    local procedure EvaluateDate(TextValue: Text): Date
+    var
+        ResultDate: Date;
+    begin
+        if not Evaluate(ResultDate, TextValue) then
+            Error('Invalid date format: %1', TextValue);
+        exit(ResultDate);
+    end;
+
+    local procedure GetValueFromDetails(Details: Text; Index: Integer): Text
+    var
+        Values: List of [Text];
+    begin
+        Values := SplitString(Details, '|');
+        if Values.Count >= Index then
+            exit(Values.Get(Index))
+        else
+            exit('');
+    end;
+
+    local procedure SplitString(InputString: Text; Delimiter: Text): List of [Text]
+    var
+        Result: List of [Text];
+        Position: Integer;
+    begin
+        while StrPos(InputString, Delimiter) > 0 do begin
+            Position := StrPos(InputString, Delimiter);
+            Result.Add(CopyStr(InputString, 1, Position - 1));
+            InputString := DelStr(InputString, 1, Position);
+        end;
+        if InputString <> '' then
+            Result.Add(InputString);
+        exit(Result);
+    end;
+}
