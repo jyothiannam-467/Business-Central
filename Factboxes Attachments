@@ -1,0 +1,81 @@
+[EventSubscriber(ObjectType::Codeunit, Codeunit::ArchiveManagement, 'OnAfterStorePurchDocument', '', true, true)]
+    local procedure OnAfterStorePurchDocument(var PurchaseHeader: Record "Purchase Header"; var PurchaseHeaderArchive: Record "Purchase Header Archive")
+    var
+        FromDocumentAttachment: Record "Document Attachment";
+        ToDocumentAttachment: Record "Document Attachment";
+    begin
+        FromDocumentAttachment.Reset();
+        FromDocumentAttachment.SetRange("Table ID", Database::"Purchase Header");
+        if FromDocumentAttachment.IsEmpty() then
+            exit;
+
+        FromDocumentAttachment.SetRange("No.", PurchaseHeader."No.");
+        FromDocumentAttachment.SetRange("Document Type", FromDocumentAttachment."Document Type"::Order);
+        if FromDocumentAttachment.FindSet() then
+            repeat
+                Clear(ToDocumentAttachment);
+                ToDocumentAttachment.Init();
+                ToDocumentAttachment.TransferFields(FromDocumentAttachment);
+                ToDocumentAttachment.Validate("Table ID", Database::"Purchase Header Archive");
+                ToDocumentAttachment.Validate("No.", PurchaseHeaderArchive."No.");
+                ToDocumentAttachment."Line No." := PurchaseHeaderArchive."Version No.";
+                ToDocumentAttachment.Insert(true);
+            until FromDocumentAttachment.Next() = 0;
+    end;
+
+    [EventSubscriber(ObjectType::Page, Page::"Document Attachment Factbox", 'OnBeforeDrillDown', '', false, false)]
+    local procedure OnBeforeDrillDown(DocumentAttachment: Record "Document Attachment"; var RecRef: RecordRef)
+    var
+        PurchaseHeaderArchive: Record "Purchase Header Archive";
+    begin
+        case DocumentAttachment."Table ID" of
+            DATABASE::"Purchase Header Archive":
+                begin
+                    RecRef.Open(DATABASE::"Purchase Header Archive");
+                    PurchaseHeaderArchive.Reset();
+                    PurchaseHeaderArchive.SetRange("Document Type", PurchaseHeaderArchive."Document Type"::Order);
+                    PurchaseHeaderArchive.SetRange("No.", DocumentAttachment."No.");
+                    PurchaseHeaderArchive.SetRange("Version No.", DocumentAttachment."Line No.");
+                    if PurchaseHeaderArchive.FindFirst() then
+                        RecRef.GetTable(PurchaseHeaderArchive);
+                end;
+        end;
+    end;
+
+    [EventSubscriber(ObjectType::Page, Page::"Document Attachment Details", 'OnAfterOpenForRecRef', '', false, false)]
+    local procedure OnAfterOpenForRecRef(var DocumentAttachment: Record "Document Attachment"; var RecRef: RecordRef; var FlowFieldsEditable: Boolean);
+    var
+        FieldRef: FieldRef;
+        RecNo: Code[20];
+        VersionNo: Integer;
+    begin
+        case RecRef.Number of
+            DATABASE::"Purchase Header Archive":
+                begin
+                    DocumentAttachment.SetRange("Document Type", DocumentAttachment."Document Type"::Order);
+
+                    FieldRef := RecRef.Field(3);
+                    RecNo := FieldRef.Value;
+                    DocumentAttachment.SetRange("No.", RecNo);
+
+                    FieldRef := RecRef.Field(5047);
+                    VersionNo := FieldRef.Value;
+                    DocumentAttachment.SetRange("Line No.", VersionNo);
+
+                    FlowFieldsEditable := false;
+                end;
+        end;
+    end;
+
+addlast(factboxes)
+        {
+            part("Attached Documents"; "Document Attachment Factbox")
+            {
+                ApplicationArea = All;
+                Caption = 'Attachments';
+                SubPageLink = "Table ID" = CONST(Database::"Purchase Header Archive"),
+                              "No." = FIELD("No."),
+                              "Document Type" = FIELD("Document Type"),
+                              "Line No." = field("Version No.");
+            }
+        }
