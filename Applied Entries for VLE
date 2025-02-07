@@ -1,0 +1,81 @@
+ procedure GetAppliedVendEntries(var AppliedVendLedgEntry: Record "Vendor Ledger Entry" temporary; VendLedgEntry: Record "Vendor Ledger Entry"; UseLCY: Boolean)
+    var
+        ClosingVendLedgEntry: Record "Vendor Ledger Entry";
+        DtldVendLedgEntry: Record "Detailed Vendor Ledg. Entry";
+        AppliedDtldVendLedgEntry: Record "Detailed Vendor Ledg. Entry";
+    begin
+        // Temporary Table, AppliedVendLedgEntry, to be filled in with everything that VendLedgEntry applied to.
+        // Note that within AppliedVendLedgEntry, the "Amount to Apply" field will be filled in with the Amount Applied.
+        // IF UseLCY is TRUE, Amount Applied will be in LCY, else it will be in the application currency
+        AppliedVendLedgEntry.Reset;
+        AppliedVendLedgEntry.DeleteAll;
+
+        DtldVendLedgEntry.SetCurrentKey("Vendor Ledger Entry No.");
+        DtldVendLedgEntry.SetRange("Vendor Ledger Entry No.", VendLedgEntry."Entry No.");
+        DtldVendLedgEntry.SetRange(Unapplied, false);
+        if DtldVendLedgEntry.Find('-') then
+            repeat
+                if DtldVendLedgEntry."Vendor Ledger Entry No." =
+                   DtldVendLedgEntry."Applied Vend. Ledger Entry No."
+                then begin
+                    AppliedDtldVendLedgEntry.Init;
+                    AppliedDtldVendLedgEntry.SetCurrentKey("Applied Vend. Ledger Entry No.", "Entry Type");
+                    AppliedDtldVendLedgEntry.SetRange(
+                      "Applied Vend. Ledger Entry No.", DtldVendLedgEntry."Applied Vend. Ledger Entry No.");
+                    AppliedDtldVendLedgEntry.SetRange(
+                      "Entry Type", AppliedDtldVendLedgEntry."Entry Type"::Application);
+                    AppliedDtldVendLedgEntry.SetRange(Unapplied, false);
+                    if AppliedDtldVendLedgEntry.Find('-') then
+                        repeat
+                            if AppliedDtldVendLedgEntry."Vendor Ledger Entry No." <>
+                               AppliedDtldVendLedgEntry."Applied Vend. Ledger Entry No."
+                            then begin
+                                if ClosingVendLedgEntry.Get(AppliedDtldVendLedgEntry."Vendor Ledger Entry No.") then begin
+                                    AppliedVendLedgEntry := ClosingVendLedgEntry;
+                                    if UseLCY then
+                                        AppliedVendLedgEntry."Amount to Apply" := -AppliedDtldVendLedgEntry."Amount (LCY)"
+                                    else
+                                        AppliedVendLedgEntry."Amount to Apply" := -AppliedDtldVendLedgEntry.Amount;
+                                    if AppliedVendLedgEntry.Insert then;
+                                    AppliedVendLedgEntry."Posting Date" := AppliedDtldVendLedgEntry."Posting Date";
+                                end;
+                            end;
+                        until AppliedDtldVendLedgEntry.Next = 0;
+                end else begin
+                    if ClosingVendLedgEntry.Get(DtldVendLedgEntry."Applied Vend. Ledger Entry No.") then begin
+                        AppliedVendLedgEntry := ClosingVendLedgEntry;
+                        if UseLCY then
+                            AppliedVendLedgEntry."Amount to Apply" := DtldVendLedgEntry."Amount (LCY)"
+                        else
+                            AppliedVendLedgEntry."Amount to Apply" := DtldVendLedgEntry.Amount;
+                        if AppliedVendLedgEntry.Insert then;
+                        AppliedVendLedgEntry."Posting Date" := DtldVendLedgEntry."Posting Date";
+                    end;
+                end;
+            until DtldVendLedgEntry.Next = 0;
+
+        if VendLedgEntry."Closed by Entry No." <> 0 then begin
+            if ClosingVendLedgEntry.Get(VendLedgEntry."Closed by Entry No.") then begin
+                AppliedVendLedgEntry := ClosingVendLedgEntry;
+                if UseLCY then
+                    AppliedVendLedgEntry."Amount to Apply" := -VendLedgEntry."Closed by Amount (LCY)"
+                else
+                    AppliedVendLedgEntry."Amount to Apply" := -VendLedgEntry."Closed by Amount";
+                if AppliedVendLedgEntry.Insert then;
+                AppliedVendLedgEntry."Posting Date" := VendLedgEntry."Posting Date";
+            end;
+        end;
+
+        ClosingVendLedgEntry.Reset;
+        ClosingVendLedgEntry.SetCurrentKey("Closed by Entry No.");
+        ClosingVendLedgEntry.SetRange("Closed by Entry No.", VendLedgEntry."Entry No.");
+        if ClosingVendLedgEntry.Find('-') then
+            repeat
+                AppliedVendLedgEntry := ClosingVendLedgEntry;
+                if UseLCY then
+                    AppliedVendLedgEntry."Amount to Apply" := ClosingVendLedgEntry."Closed by Amount (LCY)"
+                else
+                    AppliedVendLedgEntry."Amount to Apply" := ClosingVendLedgEntry."Closed by Amount";
+                if AppliedVendLedgEntry.Insert then;
+            until ClosingVendLedgEntry.Next = 0;
+    end;
