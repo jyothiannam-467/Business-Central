@@ -1,0 +1,251 @@
+report 50034 "Customs Sales Import"
+{
+    UsageCategory = ReportsAndAnalysis;
+    ApplicationArea = All;
+    ProcessingOnly = true;
+    Caption = 'Import Custom Sales';
+    UseRequestPage = false;
+
+    trigger OnPostReport()
+    begin
+        ReadExcelData();
+        ImportPurchaseInvoiceDocument();
+
+    end;
+
+    PROCEDURE GetValueAtCell(RowNo: Integer; ColumnNo: Integer): Text;
+    BEGIN
+        IF TempExcelBuffer1.GET(RowNo, ColumnNo) THEN
+            EXIT(TempExcelBuffer1."Cell Value as Text");
+    END;
+
+
+    var
+        TempExcelBuffer1: Record "Excel Buffer";
+        ExcelBuffer: Record "Excel Buffer";
+        SheetName: Text;
+        DialogCaption: Text;
+        Name: Text;
+        text001: Label 'Sales %1 imported sucessfully From Sales Order No. %2 to %3';
+        text0011: Label 'Sales %1 imported sucessfully Sales No. %2';
+        text002: Label 'Check for the error file for data corrections';
+        NVInStream: InStream;
+        UploadResult: Boolean;
+        ErrorCount: Integer;
+        CustomerPONo: Code[50];
+        SelltocustomerNo: Code[20];
+        BilltocustomerNo: Code[20];
+        OrderDate: Date;
+        PostingDate: Date;
+        LocationCode: Code[20];
+        CurrencyCode: Code[20];
+        GSTWithOutPaymentOfDuty: Boolean;
+        ProjectName: Text[50];
+
+        Shiptocode: Code[20];
+        SnipmentDate: Date;
+        Paymentterms: Code[20];
+        PreTextType: Text;
+        PreTextNo: Code[20];
+        TypeTxt: Text;
+        NoGvar: Code[20];
+        Quantity: Decimal;
+
+        UOM: Code[20];
+        GSTGroupCode: Code[20];
+
+        GSTPlaceofsupply: code[20];
+        GSTGroupType: Code[20];
+        HSNSACCode: Code[20];
+
+
+        Uploading: Label 'Please Choose The Excel File';
+        NoFileMsg: Label 'No Excel File Found';
+        FileName: Text[100];
+
+        FromPINVNoGvar: Code[20];
+        ToPINVNoGvar: Code[20];
+
+    procedure ReadExcelData()
+    var
+        FileManagement: Codeunit "File Management";
+        FromFile: Text[100];
+        IsStream: InStream;
+    begin
+        UploadIntoStream(Uploading, '', '', FromFile, IsStream);
+        if FromFile <> '' then begin
+            FileName := FileManagement.GetFileName(FromFile);
+            SheetName := ExcelBuffer.SelectSheetsNameStream(IsStream);
+        end else
+            Error(NoFileMsg);
+        ExcelBuffer.Reset();
+        ExcelBuffer.DeleteAll();
+        ExcelBuffer.OpenBookStream(IsStream, SheetName);
+        ExcelBuffer.ReadSheet();
+    end;
+
+    procedure ImportPurchaseInvoiceDocument()
+    var
+        SalesHeaderImport: Record "Sales Header";
+        InitSalesLine: Record "Sales Line";
+        LastSalesline: Record "Sales Line";
+        RowNo: Integer;
+        ColNo: Integer;
+        MaxNo: Integer;
+        LineNo: Integer;
+        PreCustomerPONo: Code[50];
+        CalculateTax: Codeunit "Calculate Tax";
+    begin
+        RowNo := 0;
+        ColNo := 0;
+        MaxNo := 0;
+        LineNo := 0;
+        if ExcelBuffer.FindLast() then begin
+            MaxNo := ExcelBuffer."Row No.";
+        end;
+        Clear(CustomerPONo);
+        Clear(SelltocustomerNo);
+        Clear(Paymentterms);
+        Clear(Shiptocode);
+        Clear(BilltocustomerNo);
+        Clear(OrderDate);
+        Clear(PostingDate);
+        Clear(LocationCode);
+        Clear(CurrencyCode);
+        Clear(GSTWithOutPaymentOfDuty);
+        Clear(ProjectName);
+        Clear(GSTPlaceofsupply);
+        Clear(GSTGroupType);
+        Clear(TypeTxt);
+        Clear(NoGvar);
+        Clear(Quantity);
+
+        Clear(UOM);
+        Clear(GSTGroupCode);
+        Clear(HSNSACCode);
+
+
+        for RowNo := 2 to MaxNo do begin
+            if GetValueAtCell(RowNo, 1) <> '' then
+                Evaluate(CustomerPONo, GetValueAtCell(RowNo, 1));
+
+            SelltocustomerNo := GetValueAtCell(RowNo, 2);
+            BilltocustomerNo := GetValueAtCell(RowNo, 3);
+            if getValueAtCell(RowNo, 4) <> '' then
+                Evaluate(PostingDate, getValueAtCell(RowNo, 4));
+
+            Shiptocode := GetValueAtCell(RowNo, 5);
+            Paymentterms := GetValueAtCell(RowNo, 6);
+            LocationCode := GetValueAtCell(RowNo, 7);
+
+            TypeTxt := GetValueAtCell(RowNo, 8);
+            NoGvar := GetValueAtCell(RowNo, 9);
+            if getValueAtCell(RowNo, 10) <> '' then
+                Evaluate(SnipmentDate, getValueAtCell(RowNo, 10));
+            UOM := GetValueAtCell(RowNo, 11);
+            if getValueAtCell(RowNo, 12) <> '' then
+                Evaluate(Quantity, GetValueAtCell(RowNo, 12));
+
+            GSTPlaceofsupply := GetValueAtCell(RowNo, 13);
+            GSTGroupCode := GetValueAtCell(RowNo, 14);
+            GSTGroupType := GetValueAtCell(RowNo, 15);
+            HSNSACCode := GetValueAtCell(RowNo, 16);
+
+
+            if PreCustomerPONo <> CustomerPONo then begin
+                PreCustomerPONo := CustomerPONo;
+                SalesHeaderImport.Init();
+                SalesHeaderImport.Validate("Document Type", SalesHeaderImport."Document Type"::Order);
+                SalesHeaderImport.Validate("No.", '');
+                SalesHeaderImport.Insert(true);
+                if RowNo = 2 then
+                    FromPINVNoGvar := SalesHeaderImport."No.";
+                SalesHeaderImport.Validate("Sell-to Customer No.", SelltocustomerNo);
+                SalesHeaderImport.Validate("Order Date", OrderDate);
+                SalesHeaderImport.Validate("Posting Date", PostingDate);
+                SalesHeaderImport.Validate("Location Code", LocationCode);
+                SalesHeaderImport.Validate("Currency Code", CurrencyCode);
+
+                SalesHeaderImport.Modify(true);
+
+                LastSalesline.Reset();
+                LastSalesline.SetRange("Document No.", SalesHeaderImport."No.");
+                LastSalesline.SetRange("Document Type", SalesHeaderImport."Document Type");
+                if LastSalesline.FindLast() then;
+
+                InitSalesLine.Init();
+                InitSalesLine."Document No." := SalesHeaderImport."No.";
+                InitSalesLine."Document Type" := SalesHeaderImport."Document Type";
+                InitSalesLine."Line No." := LastSalesline."Line No." + 10000;
+                if TypeTxt = 'Item' then
+                    InitSalesLine.Validate(Type, InitSalesLine.Type::Item);
+                if TypeTxt = 'G/L Account' then
+                    InitSalesLine.Validate(Type, InitSalesLine.Type::"G/L Account");
+                if TypeTxt = 'Resource' then
+                    InitSalesLine.Validate(Type, InitSalesLine.Type::Resource);
+                if TypeTxt = 'Fixed Asset' then
+                    InitSalesLine.Validate(Type, InitSalesLine.Type::"Fixed Asset");
+                InitSalesLine.Validate("No.", NoGvar);
+                InitSalesLine.Insert(true);
+                InitSalesLine.Validate(Quantity, Quantity);
+                if GSTPlaceofsupply = 'Bill-to Address' then
+                    InitSalesLine.Validate("GST Place Of Supply", InitSalesLine."GST Place Of Supply"::"Bill-to Address")
+                else
+                    if GSTPlaceofsupply = 'Ship-to Address' then
+                        InitSalesLine.Validate("GST Place Of Supply", InitSalesLine."GST Place Of Supply"::"Ship-to Address");
+                if GSTGroupCode = 'Goods' then
+                    InitSalesLine.Validate("GST Group Type", InitSalesLine."GST Group Type"::Goods)
+                else if GSTGroupCode = 'Service' then
+                    InitSalesLine.Validate("GST Group Type", InitSalesLine."GST Group Type"::Service);
+                InitSalesLine.Validate("Unit of Measure Code", UOM);
+                InitSalesLine.Validate("GST Group Code", GSTGroupCode);
+                InitSalesLine.Validate("HSN/SAC Code", HSNSACCode);
+
+                InitSalesLine.Modify(true);
+            end else begin
+                LastSalesline.Reset();
+                LastSalesline.SetRange("Document No.", SalesHeaderImport."No.");
+                LastSalesline.SetRange("Document Type", SalesHeaderImport."Document Type");
+                if LastSalesline.FindLast() then;
+
+                InitSalesLine.Init();
+                InitSalesLine."Document No." := SalesHeaderImport."No.";
+                InitSalesLine."Document Type" := SalesHeaderImport."Document Type"::Order;
+                InitSalesLine."Line No." := LastSalesline."Line No." + 10000;
+                if TypeTxt = 'Item' then
+                    InitSalesLine.Validate(Type, InitSalesLine.Type::Item);
+                if TypeTxt = 'G/L Account' then
+                    InitSalesLine.Validate(Type, InitSalesLine.Type::"G/L Account");
+                if TypeTxt = 'Resource' then
+                    InitSalesLine.Validate(Type, InitSalesLine.Type::Resource);
+                if TypeTxt = 'Fixed Asset' then
+                    InitSalesLine.Validate(Type, InitSalesLine.Type::"Fixed Asset");
+                InitSalesLine.Validate("No.", NoGvar);
+                InitSalesLine.Insert(true);
+                InitSalesLine.Validate(Quantity, Quantity);
+                if GSTPlaceofsupply = 'Bill-to Address' then
+                    InitSalesLine.Validate("GST Place Of Supply", InitSalesLine."GST Place Of Supply"::"Bill-to Address")
+                else
+                    if GSTPlaceofsupply = 'Ship-to Address' then
+                        InitSalesLine.Validate("GST Place Of Supply", InitSalesLine."GST Place Of Supply"::"Ship-to Address");
+                if GSTGroupCode = 'Goods' then
+                    InitSalesLine.Validate("GST Group Type", InitSalesLine."GST Group Type"::Goods)
+                else if GSTGroupCode = 'Service' then
+                    InitSalesLine.Validate("GST Group Type", InitSalesLine."GST Group Type"::Service);
+                InitSalesLine.Validate("Unit of Measure Code", UOM);
+                InitSalesLine.Validate("GST Group Code", GSTGroupCode);
+                InitSalesLine.Validate("HSN/SAC Code", HSNSACCode);
+                InitSalesLine.Modify(true);
+            end;
+            if RowNo = MaxNo then
+                ToPINVNoGvar := SalesHeaderImport."No.";
+        end;
+        if FromPINVNoGvar <> ToPINVNoGvar then
+            Message(text001, 'Order', FromPINVNoGvar, ToPINVNoGvar)
+        else
+            Message(text0011, 'Order', FromPINVNoGvar);
+
+    end;
+
+
+}
