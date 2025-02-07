@@ -1,0 +1,95 @@
+ local procedure InitReservEntryAgainstQtyToDispatch(SalesHeader: Record "Sales Header"; DispatchWorksheet: Record "Dispatch Worksheet")
+    var
+        SalesLine: Record "Sales Line";
+        ItemLedgEntry: Record "Item Ledger Entry";
+        ReservationEntry: Record "Reservation Entry";
+        TotalRequiredQty, TotalReservedQty, QtyToReserve : Decimal;
+        EntryNo, Sign : Integer;
+    begin
+        TotalRequiredQty := 0;
+        Sign := -1;
+
+        SalesLine.Reset();
+        SalesLine.SetRange("Document Type", SalesLine."Document Type"::Order);
+        SalesLine.SetRange("Document No.", SalesHeader."No.");
+        SalesLine.SetRange("No.", DispatchWorksheet."Item No");
+        if SalesLine.FindSet() then
+            repeat
+                TotalRequiredQty += SalesLine."Qty. to Ship";
+            until SalesLine.Next() = 0;
+
+        TotalReservedQty := 0;
+
+        ItemLedgEntry.Reset();
+        ItemLedgEntry.SetCurrentKey("Entry No.");
+        ItemLedgEntry.CalcFields("Reserved Quantity");
+        ItemLedgEntry.SetRange("Item No.", DispatchWorksheet."Item No");
+        ItemLedgEntry.SetRange("Location Code", SalesLine."Location Code");
+        ItemLedgEntry.SetFilter("Remaining Quantity", '<>0');
+        ItemLedgEntry.SetAscending("Entry No.", false); // FIFO sorting
+        if ItemLedgEntry.FindSet() then
+            repeat
+                QtyToReserve := 0;
+                EntryNo := 0;
+
+                TotalReservedQty := ItemLedgEntry."Reserved Quantity";
+
+                if TotalRequiredQty - TotalReservedQty > 0 then begin
+                    if (TotalRequiredQty - TotalReservedQty) > ItemLedgEntry."Remaining Quantity" then
+                        QtyToReserve := ItemLedgEntry."Remaining Quantity"
+                    else
+                        QtyToReserve := (TotalRequiredQty - TotalReservedQty);
+
+                    ReservationEntry.Reset();
+                    if ReservationEntry.FindLast() then
+                        EntryNo := ReservationEntry."Entry No." + 1
+                    else
+                        EntryNo := 1;
+
+                    ReservationEntry.Reset();
+                    ReservationEntry.SetRange("Source Type", 37);
+                    ReservationEntry.SetRange("Source ID", SalesHeader."No.");
+                    ReservationEntry.SetRange("Source Ref. No.", SalesLine."Line No.");
+                    ReservationEntry.SetRange("Item No.", SalesLine."No.");
+                    ReservationEntry.SetRange(Quantity, QtyToReserve);
+                    if Not ReservationEntry.FindFirst() then begin
+                        ReservationEntry.Init();
+
+                        ReservationEntry."Entry No." := EntryNo;
+                        ReservationEntry."Reservation Status" := ReservationEntry."Reservation Status"::Prospect;
+
+                        ReservationEntry."Source Type" := Database::"Sales Line";
+                        ReservationEntry."Source Subtype" := 1;
+                        ReservationEntry."Source ID" := SalesHeader."No.";
+                        ReservationEntry."Source Ref. No." := DispatchWorksheet."Line No.";
+
+                        ReservationEntry."Item No." := DispatchWorksheet."Item No";
+                        ReservationEntry."Location Code" := SalesLine."Location Code";
+                        ReservationEntry."Shipment Date" := SalesLine."Shipment Date";
+                        ReservationEntry."Qty. per Unit of Measure" := SalesLine."Qty. per Unit of Measure";
+                        ReservationEntry.Quantity := Sign * QtyToReserve;
+                        ReservationEntry.Validate("Quantity (Base)", Sign * QtyToReserve);
+                        ReservationEntry."Lot No." := ItemLedgEntry."Lot No.";
+                        ReservationEntry."Serial No." := ItemLedgEntry."Serial No.";
+
+                        ReservationEntry."Creation Date" := WorkDate();
+                        ReservationEntry."Created By" := CopyStr(UserId(), 1, 50);
+
+                        ReservationEntry."Item Ledger Entry No." := ItemLedgEntry."Entry No.";
+                        if (ItemLedgEntry."Lot No." <> '') and (ItemLedgEntry."Serial No." <> '') then
+                            ReservationEntry."Item Tracking" := ReservationEntry."Item Tracking"::"Lot and Serial No."
+                        else
+                            if ItemLedgEntry."Lot No." <> '' then
+                                ReservationEntry."Item Tracking" := ReservationEntry."Item Tracking"::"Lot No."
+                            else
+                                if ItemLedgEntry."Serial No." <> '' then
+                                    ReservationEntry."Item Tracking" := ReservationEntry."Item Tracking"::"Serial No.";
+                        ReservationEntry.Positive := (ReservationEntry."Quantity (Base)" > 0);
+
+                        ReservationEntry.Insert();
+
+                        TotalReservedQty += QtyToReserve;
+                    end;
+                end;
+            until (ItemLedgEntry.Next() = 0) or (TotalReservedQty >= TotalRequiredQty);
+    end;
