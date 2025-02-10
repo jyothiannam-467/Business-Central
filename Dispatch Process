@@ -1,0 +1,750 @@
+table 50034 "Dispatch Worksheet"
+{
+    Caption = 'Dispatch Worksheet';
+    DataClassification = CustomerContent;
+
+    fields
+    {
+        field(1; "Entry No."; Integer)
+        {
+            AutoIncrement = true;
+            Caption = 'Line No.';
+            DataClassification = CustomerContent;
+        }
+        field(2; "Sales Order"; Code[20])
+        {
+            Caption = 'Sale Order No.';
+            TableRelation = "Sales Header"."No." where("Document Type" = filter('Order'));
+            DataClassification = CustomerContent;
+        }
+        field(3; "Production Order no"; code[20])
+        {
+            Caption = 'Production Number';
+            DataClassification = CustomerContent;
+        }
+        field(4; "Sell To Customer"; Text[100])
+        {
+            Caption = 'Customer No.';
+            TableRelation = Customer."No.";
+            DataClassification = CustomerContent;
+        }
+        field(5; "Ship To Code"; Code[10])
+        {
+            DataClassification = CustomerContent;
+            Caption = 'Ship To Code';
+            TableRelation = "Sales Header"."Ship-to Code";
+            ValidateTableRelation = false;
+        }
+        field(6; "Item no"; Code[20])
+        {
+            DataClassification = CustomerContent;
+            Caption = 'Item No.';
+            TableRelation = Item."No.";
+            trigger OnValidate()
+            var
+                Item: Record Item;
+            begin
+                if Item.Get(Rec."Item no") then begin
+                    Rec."Per Weight" := Item."Net Weight";
+                    Rec."Qty per CT" := Item."Qty per CT";
+                    Rec."Total Weight" := Item."Net Weight" * Item."Qty per CT";
+                    Rec.Description := Item.Description;
+                end
+                Else begin
+                    Rec."Per Weight" := 0;
+                    Rec."Qty per CT" := 0;
+                    Rec."Total Weight" := 0;
+                    Rec.Description := '';
+                end;
+            End;
+        }
+        field(7; Description; Text[100])
+        {
+            Caption = 'Item Description';
+            DataClassification = CustomerContent;
+        }
+        field(8; Quantity; Decimal)
+        {
+            DataClassification = CustomerContent;
+            Caption = 'Quantity';
+            trigger OnValidate()
+            begin
+                if Quantity <> 0 then
+                    Rec."Pending Dispatch" := Rec.Quantity - Rec."Dispatched Qty";
+            end;
+        }
+        field(9; "Dispatch Quantity"; Decimal)
+        {
+            DataClassification = CustomerContent;
+            Caption = 'Dispatch Quantity';
+        }
+        field(10; "OutSatnding Qty"; Decimal)
+        {
+            DataClassification = CustomerContent;
+            Caption = 'OutSatnding Qty';
+        }
+        field(11; "Delivery Date"; Date)
+        {
+            DataClassification = CustomerContent;
+            Caption = 'Delivery Date';
+        }
+        field(12; "Routing Status"; Option)
+        {
+            OptionMembers = " ",Planned,"In Progress",Finished;
+            OptionCaption = ' ,Planned,In Progress,Finished';
+            DataClassification = CustomerContent;
+        }
+        field(13; "Total Weight"; Decimal)
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(14; "Ready Qty"; Decimal)
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(15; "Dispatched Qty"; Decimal)
+        {
+            AccessByPermission = TableData "Sales Shipment Header" = R;
+            Caption = 'Dispatched Qty';
+            DecimalPlaces = 0 : 5;
+            Editable = false;
+            DataClassification = ToBeClassified;
+            trigger OnValidate()
+            var
+                SalesShipmentLine: Record "Sales Shipment Line";
+                DispatchedQty: Decimal;
+            begin
+                Clear(DispatchedQty);
+
+                SalesShipmentLine.SetCurrentKey("Document No.", "No.", "Shipment Date");
+                SalesShipmentLine.SetRange("Order No.", Rec."Sales Order");
+                SalesShipmentLine.SetRange("Order Line No.", Rec."Line No.");
+                SalesShipmentLine.SetFilter(Quantity, '<>%1', 0);
+                SalesShipmentLine.CalcSums(Quantity);
+                DispatchedQty := SalesShipmentLine.Quantity;
+
+                Rec."Dispatched Qty" := DispatchedQty;
+                Rec."Pending Dispatch" := Rec.Quantity - Rec."Dispatched Qty";
+            end;
+        }
+        field(16; "Qty per CT"; Decimal)
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(17; "Customer Names"; text[250])
+        {
+            Caption = 'Customer Name';
+            DataClassification = ToBeClassified;
+        }
+        field(18; "Per Weight"; Decimal)
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(19; "Pending Dispatch"; Decimal)
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(20; "Dispatch Qty"; Decimal)
+        {
+            Caption = 'Dispatch Qty';
+            DataClassification = ToBeClassified;
+            trigger OnValidate()
+            begin
+                Rec."Pending Dispatch" := Rec.Quantity - Rec."Dispatched Qty";
+                if Rec."Dispatch Qty" > "Pending Dispatch" then
+                    Error(Err_01_Lbl);
+            end;
+        }
+        field(21; "Location Code"; Code[20])
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(22; Availability; Decimal)
+        {
+            FieldClass = FlowField;
+            CalcFormula = Sum("Item Ledger Entry".Quantity WHERE("Item No." = FIELD("Item no"), "Location Code" = FIELD("Location code"), "Remaining Quantity" = FILTER(<> 0)));
+        }
+        field(23; "Line No."; Integer)
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(24; "Customer PO No."; Code[20])
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(25; "Customer PO Date"; Date)
+        {
+            DataClassification = ToBeClassified;
+        }
+    }
+    keys
+    {
+        key(PK; "Entry No.")
+        {
+            Clustered = true;
+        }
+    }
+    trigger OnInsert()
+    var
+        DispacthWorksheet: Record "Dispatch Worksheet";
+    begin
+        DispacthWorksheet.Reset();
+        if DispacthWorksheet.FindLast() then
+            Rec."Entry No." := DispacthWorksheet."Entry No." + 1
+        else
+            Rec."Entry No." := 1;
+    end;
+
+    var
+        Err_01_Lbl: Label 'Qty to dispatch must be less than the pending dispatch';
+}
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+page 50051 "Dispatch RPO Schedule"
+{
+    Caption = 'Dispatch Planning';
+    PageType = Worksheet;
+    UsageCategory = Tasks;
+    SourceTable = "Dispatch Worksheet";
+    DelayedInsert = true;
+    ApplicationArea = All;
+    layout
+    {
+        area(Content)
+        {
+            group(general)
+            {
+                Caption = 'General';
+                field(CustomerNo; CustomerNo)
+                {
+                    Caption = 'Customer No.';
+                    TableRelation = Customer."No.";
+                    trigger OnValidate()
+                    begin
+                        Filtervalues();
+                    end;
+                }
+            }
+
+            repeater(Control1000000000)
+            {
+                field("Sales Order"; Rec."Sales Order")
+                {
+                    Editable = false;
+                    ApplicationArea = All;
+                }
+                field("Line No."; Rec."Line No.")
+                {
+                    Caption = 'Sale Order Line No.';
+                    Editable = false;
+                    ApplicationArea = All;
+                }
+                field("Customer Names"; Rec."Customer Names")
+                {
+                    ApplicationArea = all;
+                    Editable = false;
+                }
+                field("Item no"; Rec."Item no")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field(Description; Rec.Description)
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Per Weight"; Rec."Per Weight")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Qty per CT"; Rec."Qty per CT")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Total Weight"; Rec."Total Weight")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field(Quantity; Rec.Quantity)
+                {
+                    ApplicationArea = All;
+                    Caption = 'Ordered Qty';
+                    Editable = false;
+                }
+                field("Dispatch Qty"; Rec."Dispatch Qty")
+                {
+                    Caption = 'Qty. to dispatch';
+                    ApplicationArea = All;
+                }
+                field("Dispatched Qty"; Rec."Dispatched Qty")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                    trigger OnDrillDown()
+                    var
+                        SalesShipmentLine: Record "Sales Shipment Line";
+                    begin
+                        SalesShipmentLine.SetCurrentKey("Document No.", "No.", "Shipment Date");
+                        SalesShipmentLine.SetRange("Order No.", Rec."Sales Order");
+                        SalesShipmentLine.SetRange("Order Line No.", Rec."Line No.");
+                        SalesShipmentLine.SetFilter(Quantity, '<>%1', 0);
+                        Page.RunModal(0, SalesShipmentLine);
+                    end;
+                }
+                field("Delivery Date"; Rec."Delivery Date")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Pending Dispatch"; Rec."Pending Dispatch")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field(Availability; Rec.Availability)
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Customer PO No."; Rec."Customer PO No.")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Customer PO Date"; Rec."Customer PO Date")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+            }
+
+        }
+    }
+    actions
+    {
+        area(Processing)
+        {
+            action(Post)
+            {
+                Caption = 'Post';
+                Image = Post;
+                ApplicationArea = All;
+                trigger OnAction()
+                begin
+                    if Confirm(Confirm_03_Lbl) then
+                        PostDispatch();
+                end;
+            }
+            action("Create Dispatch")
+            {
+                Caption = 'Create Dispatch';
+                Image = Line;
+                ApplicationArea = All;
+                trigger OnAction()
+                begin
+                    if CustomerNo = '' then
+                        Error(Err_01_Lbl);
+
+                    if Confirm(StrSubstNo(Confirm_01_Lbl, CustomerNo)) then
+                        CreateDispatch();
+                end;
+            }
+            action(ExportToExcel)
+            {
+                Caption = 'Export to excel';
+                Image = Excel;
+                ApplicationArea = All;
+                trigger OnAction()
+                begin
+                    if CustomerNo = '' then
+                        Error(Err_01_Lbl);
+
+                    if Confirm(Confirm_02_Lbl) then begin
+                        CreateDispatch();
+                        TempExcelBuffer.Reset();
+                        TempExcelBuffer.DeleteAll();
+                        CreateExcelHeaderILE();
+                        ExportToExcelILE();
+                        TempExcelBuffer.CreateNewBook(ReportFileName);
+                        TempExcelBuffer.WriteSheet(ReportFileName, CompanyName, UserId);
+                        TempExcelBuffer.CloseBook();
+                        TempExcelBuffer.SetFriendlyFilename(ReportFileName);
+                        TempExcelBuffer.OpenExcel();
+                    end;
+                End;
+            }
+
+        }
+        area(Promoted)
+        {
+            actionref(CreateDispatch_ActionRef; "Create Dispatch")
+            {
+
+            }
+            actionref(Post_ActionRef; Post)
+            {
+
+            }
+            actionref(ExportToExcel_Promoted; ExportToExcel)
+            {
+
+            }
+        }
+    }
+
+    var
+        TempExcelBuffer: Record "Excel Buffer" temporary;
+        CustomerNo: Code[20];
+        ReportFileName: Label 'Item Ledger Entries';
+        Confirm_01_Lbl: Label 'Do you want to create dispatch lines for customer %1 ?';
+        Confirm_02_Lbl: Label 'Do you want to export Item Ledger Entries ?';
+        Confirm_03_Lbl: Label 'Do You Want to Post dispatch Lines ?';
+        Msg_01_Lbl: Label 'Dispatch Lines Inserted';
+        Msg_02_Lbl: Label 'Creating Dispatch Lines';
+        Msg_03_Lbl: Label 'Exporting Item Ledger Lines';
+        Msg_04_Lbl: Label 'Posting Dispatch Lines';
+        Err_01_Lbl: Label 'Pls Select Customer No.';
+        Err_02_Lbl: Label 'Qty. to dispatch must have value for %1 for line No. %2';
+
+    trigger OnOpenPage()
+    var
+        DispatchWorksheet: Record "Dispatch Worksheet";
+    begin
+        Filtervalues;
+
+        DispatchWorksheet.Reset();
+        DispatchWorksheet.DeleteAll();
+    end;
+
+    procedure Filtervalues()
+    begin
+        Rec.SetRange("Sell To Customer", CustomerNo);
+        CurrPage.Update(false);
+    end;
+
+    procedure CreateDispatch()
+    var
+        SalesHeader: Record "Sales Header";
+        SalesLine: Record "Sales Line";
+        DispatchWorksheet: Record "Dispatch Worksheet";
+        Item: Record Item;
+        ItemlederEntrylrec: Record "Item Ledger Entry";
+        LinesInserted: Boolean;
+        Window: Dialog;
+    begin
+        SalesHeader.Reset();
+        SalesHeader.SetCurrentKey("Document Date");
+        SalesHeader.SetRange("Document Type", SalesHeader."Document Type"::Order);
+        SalesHeader.SetRange("Sell-to Customer No.", CustomerNo);
+        SalesHeader.SetRange(Status, SalesHeader.Status::Released);
+        SalesHeader.SetAscending("Document Date", true);
+        if SalesHeader.FindSet() then begin
+            repeat
+                Window.Open(Msg_02_Lbl);
+
+                SalesLine.Reset();
+                SalesLine.SetRange("Document Type", SalesLine."Document Type"::Order);
+                SalesLine.SetRange("Document No.", SalesHeader."No.");
+                if SalesLine.FindSet() then
+                    repeat
+                        if SalesLine.Quantity <> SalesLine."Quantity Shipped" then begin
+                            if Item.Get(SalesLine."No.") then begin
+                                Item.CalcFields(Inventory);
+                                if Item.Inventory <> 0 then begin
+                                    DispatchWorksheet.Reset();
+                                    DispatchWorksheet.SetRange("Sales Order", SalesLine."Document No.");
+                                    DispatchWorksheet.SetRange("Line No.", SalesLine."Line No.");
+                                    DispatchWorksheet.SetRange("Sell To Customer", CustomerNo);
+                                    if not DispatchWorksheet.FindFirst() then begin
+                                        DispatchWorksheet.Init();
+                                        DispatchWorksheet."Sales Order" := SalesLine."Document No.";
+                                        DispatchWorksheet."Sell To Customer" := SalesLine."Sell-to Customer No.";
+                                        DispatchWorksheet."Customer Names" := SalesHeader."Sell-to Customer Name";
+                                        DispatchWorksheet.Validate("Item no", SalesLine."No.");
+                                        DispatchWorksheet."Line No." := SalesLine."Line No.";
+                                        DispatchWorksheet."Location Code" := SalesLine."Location Code";
+                                        DispatchWorksheet.Validate(Quantity, SalesLine.Quantity);
+                                        DispatchWorksheet."Ship To Code" := SalesHeader."Ship-to Code";
+                                        DispatchWorksheet."Customer PO No." := SalesHeader."Customer PO No.";
+                                        DispatchWorksheet."Customer PO Date" := SalesHeader."Document Date";
+                                        DispatchWorksheet."OutSatnding Qty" := SalesLine."Outstanding Quantity";
+                                        DispatchWorksheet."Delivery Date" := SalesLine."Planned Delivery Date";
+                                        DispatchWorksheet.Validate("Dispatched Qty");
+                                        DispatchWorksheet.Validate("Dispatch Qty");
+                                        DispatchWorksheet.Insert(true);
+                                        LinesInserted := true;
+                                    end;
+                                end;
+                            end;
+                        End;
+                    until SalesLine.Next() = 0;
+            until SalesHeader.Next() = 0
+        end;
+
+        Window.Close();
+
+        if LinesInserted then
+            Message(Msg_01_Lbl);
+    end;
+
+
+    local procedure PostDispatch()
+    var
+        DispatchWorksheet: Record "Dispatch Worksheet";
+        Item: Record Item;
+        SalesHeader: Record "Sales Header";
+        SalesLine: Record "Sales Line";
+        SalesPost: Codeunit "Sales-Post";
+        Window: Dialog;
+    begin
+        DispatchWorksheet.Reset();
+        CurrPage.SetSelectionFilter(DispatchWorksheet);
+        if DispatchWorksheet.FindSet() then
+            repeat
+                if DispatchWorksheet."Dispatch Qty" = 0 then
+                    Error(Err_02_Lbl, DispatchWorksheet."Sales Order", DispatchWorksheet."Line No.");
+
+                Window.Open(Msg_04_Lbl);
+
+                SalesHeader.Reset();
+                SalesHeader.SetRange("Document Type", SalesHeader."Document Type"::Order);
+                SalesHeader.SetRange("No.", DispatchWorksheet."Sales Order");
+                if SalesHeader.FindFirst() then begin
+                    SalesHeader.Ship := true;
+                    SalesHeader.Modify();
+
+                    SalesLine.Reset();
+                    SalesLine.SetRange("Document Type", SalesLine."Document Type"::Order);
+                    SalesLine.SetRange("Document No.", SalesHeader."No.");
+                    if SalesLine.FindSet() then
+                        repeat
+                            if SalesLine."Line No." = DispatchWorksheet."Line No." then
+                                SalesLine.Validate("Qty. to Ship", DispatchWorksheet."Dispatch Qty")
+                            else
+                                SalesLine.Validate("Qty. to Ship", 0);
+                            SalesLine.Modify();
+                        until SalesLine.Next() = 0;
+
+                    InitReservEntryAgainstQtyToDispatch(SalesHeader, DispatchWorksheet);
+
+                    SalesPost.Run(SalesHeader);
+                end;
+
+                DispatchWorksheet.Validate("Dispatched Qty");
+                DispatchWorksheet."Dispatch Qty" := 0;
+                DispatchWorksheet.Modify();
+
+                if DispatchWorksheet.Quantity = DispatchWorksheet."Dispatched Qty" then
+                    DispatchWorksheet.Delete();
+
+            until DispatchWorksheet.Next() = 0;
+
+        Window.Close();
+    end;
+
+    local procedure InitReservEntryAgainstQtyToDispatch(SalesHeader: Record "Sales Header"; DispatchWorksheet: Record "Dispatch Worksheet")
+    var
+        SalesLine: Record "Sales Line";
+        ItemLedgEntry: Record "Item Ledger Entry";
+        ReservationEntry: Record "Reservation Entry";
+        TotalRequiredQty, TotalReservedQty, QtyToReserve : Decimal;
+        EntryNo, Sign : Integer;
+    begin
+        //Deleting Previous Reservation Entries
+        ReservationEntry.Reset();
+        ReservationEntry.SetRange("Source Type", 37);
+        ReservationEntry.Setrange("Source Subtype", 1);
+        ReservationEntry.SetRange("Source ID", DispatchWorksheet."Sales Order");
+        ReservationEntry.SetRange("Source Ref. No.", DispatchWorksheet."Line No.");
+        ReservationEntry.SetRange("Item No.", DispatchWorksheet."Item no");
+        if ReservationEntry.FindSet() then
+            ReservationEntry.DeleteAll();
+
+        TotalRequiredQty := 0;
+        TotalReservedQty := 0;
+        Sign := -1;
+
+        SalesLine.Reset();
+        SalesLine.SetRange("Document Type", SalesLine."Document Type"::Order);
+        SalesLine.SetRange("Document No.", DispatchWorksheet."Sales Order");
+        SalesLine.SetRange("No.", DispatchWorksheet."Item No");
+        if SalesLine.FindSet() then
+            repeat
+                TotalRequiredQty += SalesLine."Qty. to Ship";
+            until SalesLine.Next() = 0;
+
+        ItemLedgEntry.Reset();
+        ItemLedgEntry.SetCurrentKey("Entry No.");
+        ItemLedgEntry.CalcFields("Reserved Quantity");
+        ItemLedgEntry.SetRange("Item No.", DispatchWorksheet."Item No");
+        ItemLedgEntry.SetRange("Location Code", DispatchWorksheet."Location Code");
+        ItemLedgEntry.SetFilter("Remaining Quantity", '<>0');
+        ItemLedgEntry.SetAscending("Entry No.", false); // FIFO sorting
+        if ItemLedgEntry.FindSet() then
+            repeat
+                QtyToReserve := 0;
+                EntryNo := 0;
+
+                TotalReservedQty := ItemLedgEntry."Reserved Quantity";
+
+                if TotalRequiredQty - TotalReservedQty > 0 then begin
+                    if (TotalRequiredQty - TotalReservedQty) > ItemLedgEntry."Remaining Quantity" then
+                        QtyToReserve := ItemLedgEntry."Remaining Quantity"
+                    else
+                        QtyToReserve := (TotalRequiredQty - TotalReservedQty);
+
+                    ReservationEntry.Reset();
+                    if ReservationEntry.FindLast() then
+                        EntryNo := ReservationEntry."Entry No." + 1
+                    else
+                        EntryNo := 1;
+
+                    //Creating New Reservation Entries
+                    ReservationEntry.Reset();
+                    ReservationEntry.SetRange("Source Type", 37);
+                    ReservationEntry.Setrange("Source Subtype", 1);
+                    ReservationEntry.SetRange("Source ID", DispatchWorksheet."Sales Order");
+                    ReservationEntry.SetRange("Source Ref. No.", DispatchWorksheet."Line No.");
+                    ReservationEntry.SetRange("Item No.", DispatchWorksheet."Item no");
+                    ReservationEntry.SetRange(Quantity, QtyToReserve);
+                    if Not ReservationEntry.FindFirst() then begin
+                        ReservationEntry.Init();
+
+                        ReservationEntry."Entry No." := EntryNo;
+                        ReservationEntry."Reservation Status" := ReservationEntry."Reservation Status"::Prospect;
+
+                        ReservationEntry."Source Type" := Database::"Sales Line";
+                        ReservationEntry."Source Subtype" := 1;
+                        ReservationEntry."Source ID" := DispatchWorksheet."Sales Order";
+                        ReservationEntry."Source Ref. No." := DispatchWorksheet."Line No.";
+
+                        ReservationEntry."Item No." := DispatchWorksheet."Item No";
+                        ReservationEntry."Location Code" := SalesHeader."Location Code";
+                        ReservationEntry."Shipment Date" := SalesHeader."Shipment Date";
+
+                        if SalesLine.get(SalesLine."Document Type"::Order, DispatchWorksheet."Sales Order", DispatchWorksheet."Line No.") then
+                            ReservationEntry."Qty. per Unit of Measure" := SalesLine."Qty. per Unit of Measure";
+
+                        ReservationEntry.Quantity := Sign * QtyToReserve;
+                        ReservationEntry.Validate("Quantity (Base)", Sign * QtyToReserve);
+                        ReservationEntry."Lot No." := ItemLedgEntry."Lot No.";
+                        ReservationEntry."Serial No." := ItemLedgEntry."Serial No.";
+
+                        ReservationEntry."Creation Date" := WorkDate();
+                        ReservationEntry."Created By" := CopyStr(UserId(), 1, 50);
+
+                        ReservationEntry."Item Ledger Entry No." := ItemLedgEntry."Entry No.";
+                        if (ItemLedgEntry."Lot No." <> '') and (ItemLedgEntry."Serial No." <> '') then
+                            ReservationEntry."Item Tracking" := ReservationEntry."Item Tracking"::"Lot and Serial No."
+                        else
+                            if ItemLedgEntry."Lot No." <> '' then
+                                ReservationEntry."Item Tracking" := ReservationEntry."Item Tracking"::"Lot No."
+                            else
+                                if ItemLedgEntry."Serial No." <> '' then
+                                    ReservationEntry."Item Tracking" := ReservationEntry."Item Tracking"::"Serial No.";
+                        ReservationEntry.Positive := (ReservationEntry."Quantity (Base)" > 0);
+
+                        ReservationEntry.Insert();
+
+                        TotalReservedQty += QtyToReserve;
+                    end;
+                end;
+            until (ItemLedgEntry.Next() = 0) or (TotalReservedQty >= TotalRequiredQty);
+    end;
+
+
+    local procedure EnterCell(RowNo: Integer; ColumnNo: Integer; CellValue: Variant; Bold: Boolean; Italic: Boolean; UnderLine: Boolean; NumberFormat: Text[30];
+    cellTypeP: Option Number,Text,Date,Time)
+    begin
+        TempExcelBuffer.Init;
+        TempExcelBuffer.Validate("Row No.", RowNo);
+        TempExcelBuffer.Validate("Column No.", ColumnNo);
+        TempExcelBuffer."Cell Value as Text" := Format(CellValue);
+        TempExcelBuffer.Formula := '';
+        TempExcelBuffer.Bold := Bold;
+        TempExcelBuffer.Italic := Italic;
+        TempExcelBuffer.Underline := UnderLine;
+        TempExcelBuffer.NumberFormat := NumberFormat;
+        TempExcelBuffer."Cell Type" := cellTypeP;
+        TempExcelBuffer.Insert;
+    end;
+
+    local procedure CreateExcelHeaderILE()
+    begin
+        EnterCell(1, 1, 'Posting Date', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 2, 'Entry Type', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 3, 'Document Type', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 4, 'Document No.', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 5, 'Item No.', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 6, 'Description', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 7, 'Location Code', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 8, 'Quantity', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 9, 'Reserved Quantity', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 10, 'Remaining Quantity', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 11, 'Invoiced Quantity', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 12, 'Serial No.', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 13, 'Lot No.', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 14, 'Sales Amount (Actual)', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 15, 'Cost Amount (Actual)', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 16, 'Cost Amount (Non-Invtbl.)', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 17, 'Open', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 18, 'Order Type', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 19, 'Entry No.', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+    end;
+
+    local procedure ExportToExcelILE()
+    var
+        DispatchWorksheet: Record "Dispatch Worksheet";
+        ILE: Record "Item Ledger Entry";
+        RowNo: Integer;
+        Window: Dialog;
+        ItemNo: Code[20];
+    begin
+        RowNo := 2;
+
+        DispatchWorksheet.Reset();
+        DispatchWorksheet.SetCurrentKey("Item no");
+        CurrPage.SetSelectionFilter(DispatchWorksheet);
+        if DispatchWorksheet.FindSet() then
+            repeat
+                if (ItemNo <> DispatchWorksheet."Item no") then begin
+                    Clear(ItemNo);
+                    ItemNo := DispatchWorksheet."Item no";
+
+                    Window.Open(Msg_03_Lbl);
+
+                    ILE.Reset();
+                    ILE.SetRange("Item No.", DispatchWorksheet."Item no");
+                    ILE.SetRange("Location Code", DispatchWorksheet."Location Code");
+                    ILE.SetFilter("Remaining Quantity", '<>%1', 0);
+                    if ILE.FindSet() then
+                        repeat
+                            EnterCell(RowNo, 1, ILE."Posting Date", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 2, ILE."Entry Type", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 3, ILE."Document Type", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 4, ILE."Document No.", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 5, ILE."Item No.", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 6, ILE.Description, false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 7, ILE."Location Code", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 8, ILE.Quantity, false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 9, ILE."Reserved Quantity", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 10, ILE."Remaining Quantity", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 11, ILE."Invoiced Quantity", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 12, ILE."Serial No.", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 13, ILE."Lot No.", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 14, ILE."Sales Amount (Actual)", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 15, ILE."Cost Amount (Actual)", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 16, ILE."Cost Amount (Non-Invtbl.)", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 17, ILE.Open, false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 18, ILE."Order Type", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 19, ILE."Entry No.", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            RowNo := RowNo + 1;
+                        Until ILE.Next() = 0;
+                end;
+            until DispatchWorksheet.Next() = 0;
+        Window.Close();
+    end;
+}
