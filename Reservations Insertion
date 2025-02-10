@@ -93,3 +93,70 @@
                 end;
             until (ItemLedgEntry.Next() = 0) or (TotalReservedQty >= TotalRequiredQty);
     end;
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ procedure CreateReservationEntries(ProductionOrderComponent: Record "Prod. Order Component"; QtyToReserveBase: Decimal; QtyToReserve: Decimal; ILEEntryNo: integer)
+    var
+        ReservationentryLRec: Record "Reservation Entry";
+        EntryNo: Integer;
+        ReservationEntryLvar: record "Reservation Entry";
+        ReservationEntryLvar2: Record "Reservation Entry";
+    begin
+        ReservationEntryLvar.Reset();
+        if ReservationEntryLvar.FindLast() then
+            EntryNo := ReservationEntryLvar."Entry No." + 1
+        else
+            EntryNo := 1;
+        //if EntryNoL <> 0 then begin
+        /// Negative Entry.....
+        ReservationEntryLvar2.INIT();
+        ReservationEntryLvar2."Entry No." := EntryNo;
+        ReservationEntryLvar2.VALIDATE(Positive, FALSE);
+        ReservationEntryLvar2.VALIDATE("Item No.", ProductionOrderComponent."Item No.");
+        ReservationEntryLvar2.VALIDATE("Location Code", ProductionOrderComponent."Location Code");
+        ReservationEntryLvar2.VALIDATE("Quantity (Base)", -QtyToReserveBase);
+        ReservationEntryLvar2.VALIDATE(Quantity, -QtyToReserve);
+        ReservationEntryLvar2.Validate("Qty. to Handle (Base)", -QtyToReserveBase);
+        ReservationEntryLvar2.Validate("Qty. to Invoice (Base)", -QtyToReserveBase);
+        ReservationEntryLvar2.VALIDATE("Reservation Status", ReservationEntryLvar2."Reservation Status"::Reservation);
+        ReservationEntryLvar2.VALIDATE("Creation Date", Today);
+        ReservationEntryLvar2.VALIDATE("Source Type", DATABASE::"Prod. Order Component");
+        ReservationEntryLvar2.VALIDATE("Source Subtype", 3);
+        ReservationEntryLvar2.VALIDATE("Source ID", ProductionOrderComponent."Prod. Order No.");
+        ReservationEntryLvar2.Validate("Source Prod. Order Line", ProductionOrderComponent."Prod. Order Line No.");
+        ReservationEntryLvar2.Validate("Source Ref. No.", ProductionOrderComponent."Line No.");
+        ReservationEntryLvar2.VALIDATE("Shipment Date", Today);
+        ReservationEntryLvar2.VALIDATE("Suppressed Action Msg.", FALSE);
+        ReservationEntryLvar2.Validate(Binding, ReservationEntryLvar2.Binding::"Order-to-Order");
+        ReservationEntryLvar2.VALIDATE("Planning Flexibility", ReservationEntryLvar2."Planning Flexibility"::Unlimited);
+        ReservationEntryLvar2."Item Tracking" := ReservationEntryLvar2."Item Tracking"::None;
+        ReservationEntryLvar2.INSERT();
+
+        ///Positive Entry...
+
+        ReservationEntryLvar2.INIT();
+        ReservationEntryLvar2."Entry No." := EntryNo;
+        ReservationEntryLvar2.VALIDATE(Positive, true);
+        ReservationEntryLvar2.VALIDATE("Item No.", ProductionOrderComponent."Item No.");
+        ReservationEntryLvar2.VALIDATE("Location Code", ProductionOrderComponent."Location Code");
+        ReservationEntryLvar2.VALIDATE("Quantity (Base)", QtyToReserveBase);
+        ReservationEntryLvar2.VALIDATE(Quantity, QtyToReserveBase);
+        ReservationEntryLvar2.Validate("Qty. to Handle (Base)", QtyToReserveBase);
+        ReservationEntryLvar2.Validate("Qty. to Invoice (Base)", QtyToReserveBase);
+        ReservationEntryLvar2.VALIDATE("Reservation Status", ReservationEntryLvar2."Reservation Status"::Reservation);
+        ReservationEntryLvar2.Validate("Qty. per Unit of Measure", ProductionOrderComponent."Qty. per Unit of Measure");
+        ReservationEntryLvar2.VALIDATE("Creation Date", Today);
+        ReservationEntryLvar2.VALIDATE("Source Type", DATABASE::"Item Ledger Entry");
+        ReservationEntryLvar2.VALIDATE("Source Subtype", 0);
+        ReservationEntryLvar2.VALIDATE("Source ID", '');
+        ReservationEntryLvar2.Validate("Source Prod. Order Line", 0);
+        ReservationEntryLvar2.Validate(Binding, ReservationEntryLvar2.Binding::"Order-to-Order");
+        ReservationEntryLvar2.Validate("Source Ref. No.", ILEEntryNo);
+        ReservationEntryLvar2.VALIDATE("Shipment Date", Today);
+        ReservationEntryLvar2."RPO No." := ProductionOrderComponent."Prod. Order No.";
+        ReservationEntryLvar2.VALIDATE("Suppressed Action Msg.", FALSE);
+        ReservationEntryLvar2.VALIDATE("Planning Flexibility", ReservationEntryLvar2."Planning Flexibility"::Unlimited);
+        ReservationEntryLvar2."Item Tracking" := ReservationEntryLvar2."Item Tracking"::None;
+        ReservationEntryLvar2.INSERT();
+    end;
+
