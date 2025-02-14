@@ -1,0 +1,36 @@
+  procedure FormatIndianCurrency(Amount: Decimal): Text
+    var
+        AmountText, FormattedText, DecimalPart : Text;
+        IntegerPart, Len : Integer;
+    begin
+        Clear(AmountText);
+        Clear(FormattedText);
+        Clear(DecimalPart);
+        Clear(IntegerPart);
+        Clear(Len);
+
+        IntegerPart := Round(Amount, 1, '=');
+        DecimalPart := Format(Amount - IntegerPart, 0, '<Precision,2>');
+        DecimalPart := CopyStr(DecimalPart, 2);
+        AmountText := Format(IntegerPart);
+        Len := StrLen(AmountText);
+        FormattedText := '';
+
+        if Len > 3 then begin
+            FormattedText := CopyStr(AmountText, Len - 2, 3);
+            AmountText := CopyStr(AmountText, 1, Len - 3);
+            while StrLen(AmountText) > 2 do begin
+                FormattedText := CopyStr(AmountText, StrLen(AmountText) - 1, 2) + ',' + FormattedText;
+                AmountText := CopyStr(AmountText, 1, StrLen(AmountText) - 2);
+            end;
+            if StrLen(AmountText) > 0 then
+                FormattedText := AmountText + ',' + FormattedText;
+        end
+        else
+            FormattedText := AmountText;
+
+        if DecimalPart <> '' then
+            exit('₹ ' + FormattedText + '.' + DecimalPart)
+        else
+            exit('₹ ' + FormattedText);
+    end;
