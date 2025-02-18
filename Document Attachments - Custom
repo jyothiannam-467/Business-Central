@@ -1,0 +1,57 @@
+Need to Add extra Filters like Document Type Based on Requirement
+area(FactBoxes)
+        {
+            Part("Attached Docuemnts"; "Document Attachment Factbox")
+            {
+                ApplicationArea = All;
+                Caption = 'Attachments';
+                SubPageLink = "Table ID" = Const(81), "No." = field("Document No.");
+            }
+        }
+
+  [EventSubscriber(ObjectType::Page, Page::"Document Attachment Factbox", 'OnBeforeDrillDown', '', false, false)]
+    local procedure OnBeforeDrillDown(DocumentAttachment: Record "Document Attachment"; var RecRef: RecordRef)
+    var
+        GenJnlLine: Record "Gen. Journal Line";
+    begin
+        case DocumentAttachment."Table ID" of
+            DATABASE::"Gen. Journal Line":
+                begin
+                    RecRef.Open(DATABASE::"Gen. Journal Line");
+                    GenJnlLine.Reset();
+                    GenJnlLine.SetRange("Document No.", DocumentAttachment."No.");
+                    if GenJnlLine.FindFirst() then
+                        RecRef.GetTable(GenJnlLine);
+                end;
+        end;
+    End;
+
+    [EventSubscriber(ObjectType::Table, Database::"Document Attachment", 'OnAfterInitFieldsFromRecRef', '', false, false)]
+    local procedure OnAfterInitFieldsFromRecRef(var DocumentAttachment: Record "Document Attachment"; var RecRef: RecordRef)
+    var
+        FieldRef: FieldRef;
+        RecNo: Code[20];
+    begin
+        case RecRef.Number of
+            Database::"Gen. Journal Line":
+                begin
+                    FieldRef := RecRef.Field(7);
+                    RecNo := FieldRef.Value;
+                    DocumentAttachment.Validate("No.", RecNo);
+                end;
+        end;
+    end;
+
+    [EventSubscriber(ObjectType::Page, Page::"Document Attachment Details", 'OnAfterOpenForRecRef', '', false, false)]
+    local procedure OnAfterOpenForRecRef(var DocumentAttachment: Record "Document Attachment"; var RecRef: RecordRef; var FlowFieldsEditable: Boolean)
+    var
+        FieldRef: FieldRef;
+        RecNo: Code[20];
+    begin
+        if RecRef.Number = Database::"Gen. Journal Line" Then begin
+            FieldRef:=RecRef.Field(7);
+            RecNo:=FieldRef.Value;
+            DocumentAttachment.SetRange("Table ID",RecRef.Number);
+            DocumentAttachment.SetRange("No.",RecNo);
+        end;
+    end;
