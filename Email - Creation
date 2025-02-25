@@ -146,4 +146,203 @@ codeunit 50081 EmailOrderConfirmation
             Result.Add(InputString);
         exit(Result);
     end;
+}   
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+codeunit 50115 PendingOrderStatus45
+{
+    trigger OnRun()
+    begin
+        PendingOrderStatus();
+    end;
+
+    procedure PendingOrderStatus()
+    var
+        ProductionOrder: Record "Production Order";
+        ProductionOrderLine: Record "Prod. Order Line";
+        OrderCommentLine: Record "Prod. Order Comment Line";
+        Customer: Record Customer;
+        Salesperson: Record "Salesperson/Purchaser";
+        CompanyInfo: Record "Company Information";
+        EmailTemplate: Record "E-Mail Template";
+        EmailMessage: Codeunit "Email Message";
+        EmailHandler: Codeunit Email;
+        SalesOrder: Record "Sales Header";
+        SalespersonData: Dictionary of [Text, Text];
+        SalespersonKeys: List of [Text];
+        EmailRecipients, EmailList, EmailList1, EmailTo, EmailCC, EmailBCC : List of [Text];
+        SalespersonEmail, SalespersonPhone, SalespersonCode, ToRecipients, CCRecipients, EmailBody, EmailSubject, Delimiter, SalesPersonDetails, KeyValue, CompanyName, ExternalDocumentNo, ExternalDocumentDateVal : Text;
+        i: Integer;
+        SalesOrderNo: Code[20];
+        OrderDate, SalesOrderDate, ExternalDocumentDate : Date;
+        Msg_Lbl: Label 'Email has been sent successfully..';
+    begin
+        Clear(SalespersonData);
+        Clear(SalespersonKeys);
+        Clear(CompanyName);
+
+        if CompanyInfo.Get() then
+            CompanyName := CompanyInfo.Name;
+
+        ProductionOrder.Reset();
+        ProductionOrder.SetRange(Status, ProductionOrder.Status::Released);
+        ProductionOrder.SetRange(Comment, true);
+        if ProductionOrder.FindSet() then
+            repeat
+                Clear(OrderDate);
+
+                OrderCommentLine.Reset();
+                OrderCommentLine.SetRange(Status, OrderCommentLine.Status::Released);
+                OrderCommentLine.SetRange("Prod. Order No.", ProductionOrder."No.");
+                if OrderCommentLine.FindLast() then
+                    OrderDate := OrderCommentLine.Date;
+
+                ProductionOrderLine.Reset();
+                ProductionOrderLine.SetRange(Status, ProductionOrderLine.Status::Released);
+                ProductionOrderLine.SetRange("Prod. Order No.", ProductionOrder."No.");
+                ProductionOrderLine.SetFilter("Customer No.", '<>%1', '');
+                if ProductionOrderLine.FindSet() then
+                    repeat
+                        Clear(EmailList);
+                        Clear(EmailList1);
+                        Clear(ToRecipients);
+                        Clear(SalespersonEmail);
+                        Clear(SalespersonPhone);
+                        Clear(SalesPersonDetails);
+                        Clear(SalesOrderNo);
+
+                        SalesOrderNo := ProductionOrderLine."Order No.";
+
+                        if Customer.Get(ProductionOrderLine."Customer No.") then begin
+                            if Salesperson.Get(Customer."Salesperson Code") then begin
+                                Delimiter := ';';
+                                EmailList := SplitString(Customer."E-Mail", Delimiter);
+
+                                EmailTemplate.Reset();
+                                EmailTemplate.SetRange("Location Code", ProductionOrderLine."Location Code");
+                                if EmailTemplate.FindSet() then
+                                    repeat
+                                        EmailList1 := SplitString(EmailTemplate."CC Email ID", Delimiter);
+                                    until EmailTemplate.Next() = 0;
+
+                                if EmailList.Count > 0 then
+                                    for i := 1 to EmailList.Count do begin
+                                        if ToRecipients = '' then
+                                            ToRecipients := EmailList.Get(i)
+                                        else
+                                            ToRecipients += ';' + EmailList.Get(i);
+                                    End;
+
+                                if EmailList1.Count > 0 then
+                                    for i := 1 to EmailList1.Count do begin
+                                        if CCRecipients = '' then
+                                            CCRecipients := EmailList.Get(i)
+                                        else
+                                            CCRecipients += ';' + EmailList.Get(i);
+                                    End;
+
+                                SalespersonEmail := Salesperson."E-Mail";
+                                SalespersonPhone := Salesperson."Phone No.";
+                                SalesPersonDetails := Format(OrderDate) + '|' + ToRecipients + '|' + CCRecipients + '|' + SalespersonEmail + '|' + SalespersonPhone + '|' + SalesOrderNo;
+                                if not SalespersonData.ContainsKey(Salesperson.Code) then begin
+                                    SalespersonData.Add(Salesperson.Code, SalesPersonDetails);
+                                    SalespersonKeys.Add(Salesperson.Code);
+                                end;
+                            end;
+                        end;
+                    until ProductionOrderLine.Next() = 0;
+            until ProductionOrder.Next() = 0;
+
+        Clear(OrderDate);
+        Clear(ToRecipients);
+        Clear(CCRecipients);
+        Clear(SalespersonEmail);
+        Clear(SalespersonPhone);
+        Clear(SalesOrderNo);
+
+        foreach SalespersonCode in SalespersonKeys do begin
+            if SalespersonData.Get(SalespersonCode, KeyValue) then begin
+                Clear(OrderDate);
+                Clear(ToRecipients);
+                Clear(CCRecipients);
+                Clear(SalespersonEmail);
+                Clear(SalespersonPhone);
+                Clear(SalesOrderNo);
+
+                OrderDate := EvaluateDate(GetValueFromDetails(KeyValue, 1));
+                ToRecipients := GetValueFromDetails(KeyValue, 2);
+                CCRecipients := GetValueFromDetails(KeyValue, 3);
+                SalespersonEmail := GetValueFromDetails(KeyValue, 4);
+                SalespersonPhone := GetValueFromDetails(KeyValue, 5);
+                SalesOrderNo := GetValueFromDetails(KeyValue, 6);
+
+                SalesOrder.Reset();
+                SalesOrder.SetRange("No.", SalesOrderNo);
+                if SalesOrder.FindFirst() then begin
+                    Clear(SalesOrderDate);
+                    Clear(ExternalDocumentNo);
+                    Clear(ExternalDocumentDate);
+                    Clear(EmailTo);
+                    Clear(EmailCC);
+
+                    SalesOrderDate := SalesOrder."Order Date";
+                    ExternalDocumentNo := SalesOrder."External Document No.";
+                    ExternalDocumentDate := SalesOrder."Customer PO Date";
+
+                    EmailSubject := 'PENDING ORDER STATUS :  ' + SalesOrderNo;
+                    EmailBody :=
+                      'Dear Sir/Madam,' + '<br><br>' +
+                      'This is an auto-generated email, please do not reply.' + '<br><br>' +
+                      'We confirm the receipt of your order ' + ExternalDocumentNo + ' / ' + Format(ExternalDocumentDate) + ' and thank you for the same.' + ' Your order is being taken for processing and tentative date of readiness is ' + Format(OrderDate) + '.' + ' Our Sales Order number is ' + SalesOrderNo + ' / ' + Format(SalesOrderDate) + '.' + '<br><br>' +
+                      'In case of any clarification or to know the status of your order, please contact ' + SalespersonCode + '. You can reach at phone number ' + SalespersonPhone + ' and email id is ' + SalespersonEmail + '<br><br>' +
+                      CompanyName + '<br>' +
+                      'Authorized Signatory';
+
+                    EmailTo := SplitString(ToRecipients, ';');
+                    EmailCC := SplitString(CCRecipients, ';');
+
+                    EmailMessage.Create(EmailTo, EmailSubject, '', true, EmailCC, EmailBCC);
+                    EmailMessage.SetBodyHTMLFormatted(true);
+                    EmailMessage.AppendToBody(EmailBody);
+                    EmailHandler.Send(EmailMessage);
+
+                    Message(Msg_Lbl);
+                end;
+            end;
+        end;
+    end;
+
+    local procedure EvaluateDate(TextValue: Text): Date
+    var
+        ResultDate: Date;
+    begin
+        if not Evaluate(ResultDate, TextValue) then
+            Error('Invalid date format: %1', TextValue);
+        exit(ResultDate);
+    end;
+
+    local procedure GetValueFromDetails(Details: Text; Index: Integer): Text
+    var
+        Values: List of [Text];
+    begin
+        Values := SplitString(Details, '|');
+        if Values.Count >= Index then
+            exit(Values.Get(Index))
+        else
+            exit('');
+    end;
+
+    local procedure SplitString(InputString: Text; Delimiter: Text): List of [Text]
+    var
+        Result: List of [Text];
+        Position: Integer;
+    begin
+        while StrPos(InputString, Delimiter) > 0 do begin
+            Position := StrPos(InputString, Delimiter);
+            Result.Add(CopyStr(InputString, 1, Position - 1));
+            InputString := DelStr(InputString, 1, Position);
+        end;
+        if InputString <> '' then
+            Result.Add(InputString);
+        exit(Result);
+    end;
 }
