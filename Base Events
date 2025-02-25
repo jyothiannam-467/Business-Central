@@ -927,3 +927,17 @@ pageextension 50113 ItemLedgerEntriesExt extends "Item Ledger Entries"
         }
     }
 }
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Item Substitution ( updating values for substitute item)
+SourceSalesLine - Main line , Sales line - After Substituting item
+[EventSubscriber(ObjectType::Codeunit, Codeunit::"Item Subst.", OnItemSubstGetOnAfterSubstSalesLineItem, '', false, false)]
+local procedure OnItemSubstGetOnAfterSubstSalesLineItem(var SalesLine: Record "Sales Line"; var SourceSalesLine: Record "Sales Line"; var TempItemSubstitution: Record "Item Substitution" temporary);
+var
+ ItemReferenceNo: Code[50];
+begin
+  Clear(ItemReferenceNo);
+
+  ItemReferenceNo := SourceSalesLine."Item Refernce No. New";
+
+  SalesLine.Validate("Item Refernce No. New", SourceSalesLine."Item Refernce No. New");
+end;
