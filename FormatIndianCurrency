@@ -33,4 +33,33 @@
             exit('₹ ' + FormattedText + '.' + DecimalPart)
         else
             exit('₹ ' + FormattedText);
+    end;   
+
+
+   procedure FormatNumberIndianStyle(Number: Decimal): Text
+    var
+        FormattedText: Text;
+        NumberStr: Text;
+        Len: Integer;
+        i: Integer;
+    begin
+        NumberStr := Format(Number, 0, 9);
+        Len := StrLen(NumberStr);
+
+        if Len > 3 then
+            FormattedText := CopyStr(NumberStr, Len - 2, 3)
+        else
+            exit(NumberStr);
+
+        i := Len - 3;
+        while i > 0 do begin
+            if (i = 1) then
+                FormattedText := CopyStr(NumberStr, i, 1) + ',' + FormattedText
+            else
+                FormattedText := CopyStr(NumberStr, i - 1, 2) + ',' + FormattedText;
+
+            i -= 2;
+        end;
+
+        exit(FormattedText);
     end;
