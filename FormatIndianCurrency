@@ -1,65 +1,38 @@
-  procedure FormatIndianCurrency(Amount: Decimal): Text
-    var
-        AmountText, FormattedText, DecimalPart : Text;
-        IntegerPart, Len : Integer;
-    begin
-        Clear(AmountText);
-        Clear(FormattedText);
-        Clear(DecimalPart);
-        Clear(IntegerPart);
-        Clear(Len);
+procedure FormatNumberIndianStyle(Number: Decimal): Text
+var
+    FormattedText: Text;
+    NumberStr: Text;
+    DecimalPart: Text;
+    WholeNumberPart: Text;
+    Len: Integer;
+    i: Integer;
+begin
+    NumberStr := Format(Number, 0, 9); 
 
-        IntegerPart := Round(Amount, 1, '=');
-        DecimalPart := Format(Amount - IntegerPart, 0, '<Precision,2>');
-        DecimalPart := CopyStr(DecimalPart, 2);
-        AmountText := Format(IntegerPart);
-        Len := StrLen(AmountText);
-        FormattedText := '';
-
-        if Len > 3 then begin
-            FormattedText := CopyStr(AmountText, Len - 2, 3);
-            AmountText := CopyStr(AmountText, 1, Len - 3);
-            while StrLen(AmountText) > 2 do begin
-                FormattedText := CopyStr(AmountText, StrLen(AmountText) - 1, 2) + ',' + FormattedText;
-                AmountText := CopyStr(AmountText, 1, StrLen(AmountText) - 2);
-            end;
-            if StrLen(AmountText) > 0 then
-                FormattedText := AmountText + ',' + FormattedText;
-        end
-        else
-            FormattedText := AmountText;
-
-        if DecimalPart <> '' then
-            exit('₹ ' + FormattedText + '.' + DecimalPart)
-        else
-            exit('₹ ' + FormattedText);
-    end;   
-
-
-   procedure FormatNumberIndianStyle(Number: Decimal): Text
-    var
-        FormattedText: Text;
-        NumberStr: Text;
-        Len: Integer;
-        i: Integer;
-    begin
-        NumberStr := Format(Number, 0, 9);
-        Len := StrLen(NumberStr);
-
-        if Len > 3 then
-            FormattedText := CopyStr(NumberStr, Len - 2, 3)
-        else
-            exit(NumberStr);
-
-        i := Len - 3;
-        while i > 0 do begin
-            if (i = 1) then
-                FormattedText := CopyStr(NumberStr, i, 1) + ',' + FormattedText
-            else
-                FormattedText := CopyStr(NumberStr, i - 1, 2) + ',' + FormattedText;
-
-            i -= 2;
-        end;
-
-        exit(FormattedText);
+    if StrPos(NumberStr, '.') > 0 then begin
+        WholeNumberPart := CopyStr(NumberStr, 1, StrPos(NumberStr, '.') - 1);
+        DecimalPart := CopyStr(NumberStr, StrPos(NumberStr, '.'), StrLen(NumberStr) - StrPos(NumberStr, '.') + 1);
+    end else begin
+        WholeNumberPart := NumberStr;
+        DecimalPart := '';
     end;
+
+    Len := StrLen(WholeNumberPart);
+
+    if Len > 3 then
+        FormattedText := CopyStr(WholeNumberPart, Len - 2, 3)
+    else
+        exit(NumberStr); 
+
+    i := Len - 3;
+    while i > 0 do begin
+        if (i = 1) then
+            FormattedText := CopyStr(WholeNumberPart, i, 1) + ',' + FormattedText
+        else
+            FormattedText := CopyStr(WholeNumberPart, i - 1, 2) + ',' + FormattedText;
+
+        i -= 2;
+    end;
+
+    exit(FormattedText + DecimalPart);
+end;
