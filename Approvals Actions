@@ -132,17 +132,49 @@
                     end;
                 }
             }
-------------------------------------------------------------------
- local procedure SetControlAppearance()
-    var
-        ApprovalsMgmt: Codeunit "Approvals Mgmt.";
-    begin
-        OpenApprovalEntriesExistForCurrUser := ApprovalsMgmt.HasOpenApprovalEntriesForCurrentUser(Rec.RecordId);
-        OpenApprovalEntriesExist := ApprovalsMgmt.HasOpenApprovalEntries(Rec.RecordId);
-        HasIncomingDocument := Rec."Incoming Document Entry No." <> 0;
-    end;
-------------------------------------------------------------------------
-group(Approval)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+group("Request Approval")
+            {
+                Caption = 'Request Approval';
+                action(SendApprovalRequest)
+                {
+                    Caption = 'Send Approval Request';
+                    Enabled = not OpenApprovalEntriesExist;
+                    Image = SendApprovalRequest;
+                    Promoted = true;
+                    PromotedCategory = Process;
+                    ApplicationArea = All;
+
+                    trigger OnAction()
+                    var
+                        ApprovalsCodeunit: Codeunit "Routing Approvals";
+                    begin
+                        if ApprovalsCodeunit.CheckRoutingHeaderApprovalsWorkflowEnabled(Rec) then
+                            ApprovalsCodeunit.OnSendRoutingHeaderForApproval(Rec);
+                    end;
+                }
+                action("Cancel Approval Request")
+                {
+                    Caption = 'Cancel Approval Re&quest';
+                    Enabled = OpenApprovalEntriesExist;
+                    Image = Cancel;
+                    Promoted = true;
+                    PromotedCategory = Process;
+                    ApplicationArea = All;
+                    trigger OnAction()
+                    var
+                        ApprovalsCodeunit: Codeunit "Routing Approvals";
+                    begin
+                        ApprovalsCodeunit.OnCancelRoutingHeaderForApproval(Rec);
+                        if rec.Status = rec.Status::"Pending Approval" then begin
+                            rec.Status := rec.Status::New;
+                            Rec.Modify();
+                        end;
+                    End;
+                }
+            }
+
+            group(Approvals)
             {
                 Caption = 'Approval';
                 action(Approve)
@@ -150,7 +182,7 @@ group(Approval)
                     Caption = 'Approve';
                     Image = Approve;
                     Promoted = true;
-                    PromotedCategory = Category4;
+                    PromotedCategory = Process;
                     PromotedIsBig = true;
                     Visible = OpenApprovalEntriesExistForCurrUser;
 
@@ -166,7 +198,7 @@ group(Approval)
                     Caption = 'Reject';
                     Image = Reject;
                     Promoted = true;
-                    PromotedCategory = Category4;
+                    PromotedCategory = Process;
                     PromotedIsBig = true;
                     Visible = OpenApprovalEntriesExistForCurrUser;
 
@@ -182,7 +214,7 @@ group(Approval)
                     Caption = 'Delegate';
                     Image = Delegate;
                     Promoted = true;
-                    PromotedCategory = Category4;
+                    PromotedCategory = Process;
                     Visible = OpenApprovalEntriesExistForCurrUser;
 
                     trigger OnAction()
@@ -192,3 +224,32 @@ group(Approval)
                         ApprovalsMgmt.DelegateRecordApprovalRequest(Rec.RecordId);
                     end;
                 }
+                action("Approval Entries")
+                {
+                    ApplicationArea = All;
+                    Image = Entries;
+                    Promoted = true;
+                    PromotedIsBig = true;
+                    PromotedCategory = Process;
+                    PromotedOnly = true;
+                    trigger OnAction()
+                    var
+                        ApprovalEntries: Page "Approval Entries";
+                        ApprovalEntry: Record "Approval Entry";
+                    begin
+                        ApprovalEntry.Reset();
+                        ApprovalEntry.SetRange("Table ID", DATABASE::"Routing Header");
+                        ApprovalEntry.SetRange("Document No.", Rec."No.");
+                        ApprovalEntries.SetTableView(ApprovalEntry);
+                        ApprovalEntries.RUN;
+                    end;
+                }
+
+
+ local procedure SetControlAppearance()
+    var
+        ApprovalsMgmt: Codeunit "Approvals Mgmt.";
+    begin
+        OpenApprovalEntriesExistForCurrUser := ApprovalsMgmt.HasOpenApprovalEntriesForCurrentUser(Rec.RecordId);
+        OpenApprovalEntriesExist := ApprovalsMgmt.HasOpenApprovalEntries(Rec.RecordId);
+    end;
