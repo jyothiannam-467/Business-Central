@@ -1,0 +1,9 @@
+   if UserSetup.Get(ApprovalEntries."Approver ID") then begin
+    UserSetup.CalcFields(Signature);
+    if UserSetup.Signature.HasValue then begin
+    UserSetup.Signature.CreateInStream(InStr);
+    TempBlob.CreateOutStream(OutStr);
+    CopyStream(OutStr, InStr);
+    Base64Text := Base64Convert.ToBase64(InStr);
+    ApproverID1 := Base64Text;
+  end;
