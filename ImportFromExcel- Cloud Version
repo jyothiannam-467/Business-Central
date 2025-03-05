@@ -85,7 +85,7 @@ report 50100 "Import From Excel"
 
 
 
-----------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 codeunit 50104 CargaDatos
 {
@@ -109,3 +109,103 @@ NombreHoja: Text;
 NombreFicheroLocal: Text;
 celdasleidas: Integer;
 }
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+   actions
+    {
+        area(Processing)
+        {
+            action(ImportFromExcel)
+            {
+                Caption = 'Import Employee Payroll Data';
+                Tooltip = 'To change Company Refers To and Payroll Posting Group for employees';
+                ApplicationArea = All;
+                Image = Import;
+
+                trigger OnAction()
+                var
+                    EmployeeRec: Record "Employee Details KEKA";
+                    FileMgt: Codeunit "File Management";
+                    TempBlob: Codeunit "Temp Blob";
+                    OutStr: OutStream;
+                    InStr: InStream;
+                    Dialog: Dialog;
+                    CompanyRef, FromFile : Text;
+                    SheetName: Text[250];
+                    EmployeeNo, PayrollGroup : Code[20];
+                    MaxRowNo, RowNo : Integer;
+                    DialogTitle_Lbl: Label 'Select Payroll File';
+                    Msg_01_Lbl: Label 'Processing Records...';
+                    Msg_02_Lbl: Label 'Import completed successfully.';
+                begin
+                    Clear(RowNo);
+                    Clear(MaxRowNo);
+                    Clear(SheetName);
+
+                    if UploadIntoStream(DialogTitle_Lbl, '', 'Excel File (*.xlsx)|*.xlsx', FromFile, InStr) then begin
+
+                        /*  TempBlob.CreateOutStream(OutStr);
+                         OutStr.Write(InStr);
+                         TempBlob.CreateInStream(InStr); */
+                        SheetName := ExcelBuffer.SelectSheetsNameStream(InStr);
+                        ExcelBuffer.OpenBookStream(InStr, SheetName);
+                        ExcelBuffer.ReadSheet();
+
+                        if ExcelBuffer.FindLast() then
+                            MaxRowNo := ExcelBuffer."Row No.";
+
+                        Dialog.Open(Msg_01_Lbl);
+
+                        for RowNo := 2 to MaxRowNo do begin
+                            Clear(EmployeeNo);
+                            Clear(CompanyRef);
+                            Clear(PayrollGroup);
+
+                            EmployeeNo := GetValueAtCell(RowNo, 1);
+                            CompanyRef := GetValueAtCell(RowNo, 5);
+                            PayrollGroup := GetValueAtCell(RowNo, 6);
+
+                            if EmployeeRec.Get(EmployeeNo) then begin
+                                Evaluate(EmployeeRec."Company Refers To", CompanyRef);
+                                EmployeeRec."Payroll Posting Group Code" := PayrollGroup;
+                                EmployeeRec.Modify(true);
+                            end;
+                        end;
+                        Dialog.Close();
+                        Message(Msg_02_Lbl);
+                    end;
+                end;
+            }
+        }
+
+        area(Promoted)
+        {
+            actionref(ImportFromExcel_Promoted; ImportFromExcel)
+            {
+
+            }
+        }
+    }
+    var
+        ExcelBuffer: Record "Excel Buffer" temporary;
+
+    trigger OnOpenPage()
+    var
+        ErrMsgLbl_001: Label '*%1* do not have permission to open this page. Only users with "Payroll Process" enabled can access it.';
+        UserSetup: Record "User Setup";
+    begin
+        UserSetup.Get(UserId);
+        if UserSetup."Payroll Process" = false then
+            Error(ErrMsgLbl_001, UserSetup."User ID");
+    end;
+
+    local procedure GetValueAtCell(RowNo: Integer; ColNo: Integer): Text
+    begin
+        ExcelBuffer.Reset();
+        If ExcelBuffer.Get(RowNo, ColNo) then
+            exit(ExcelBuffer."Cell Value as Text")
+        else
+            exit('');
+    end;
+}
+
+
