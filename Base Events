@@ -929,6 +929,7 @@ pageextension 50113 ItemLedgerEntriesExt extends "Item Ledger Entries"
 }
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Item Substitution ( updating values for substitute item)
+_________________________________________________________________
 SourceSalesLine - Main line , Sales line - After Substituting item
 [EventSubscriber(ObjectType::Codeunit, Codeunit::"Item Subst.", OnItemSubstGetOnAfterSubstSalesLineItem, '', false, false)]
 local procedure OnItemSubstGetOnAfterSubstSalesLineItem(var SalesLine: Record "Sales Line"; var SourceSalesLine: Record "Sales Line"; var TempItemSubstitution: Record "Item Substitution" temporary);
@@ -941,3 +942,92 @@ begin
 
   SalesLine.Validate("Item Refernce No. New", SourceSalesLine."Item Refernce No. New");
 end;
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ApprovalManagement
+________________________________
+
+ [EventSubscriber(ObjectType::Codeunit, Codeunit::"Approvals Mgmt.", OnSetStatusToPendingApproval, '', false, false)]
+    local procedure OnSetStatusToPendingApproval(RecRef: RecordRef; var Variant: Variant; var IsHandled: Boolean)
+    var
+        Vendor: Record Vendor;
+        Item: Record Item;
+        Customer: Record Customer;
+        GenJnlLine: Record "Gen. Journal Line";
+    begin
+        CASE RecRef.NUMBER OF
+            //B2BJM >>
+            DATABASE::Item:
+                BEGIN
+                    RecRef.SETTABLE(Item);
+                    Item."Approval Status" := Item."Approval Status"::"Pending for Approval";
+                    Item.MODIFY(TRUE);
+                    Variant := Item;
+                    IsHandled := true;
+                END;
+        end;
+        //B2BJM <<
+    END;
+
+ [EventSubscriber(ObjectType::Codeunit, Codeunit::"Workflow Response Handling", 'OnReleaseDocument', '', false, false)]
+    local procedure OnReleaseDocument(RecRef: RecordRef; var Handled: Boolean)
+    var
+        Item: Record Item;
+        Customer: Record Customer;
+        Vendor: Record Vendor;
+        GenJnlLine: Record "Gen. Journal Line";
+        Variant: Variant;
+    begin
+        //RecRef.GetTable(Variant);
+        CASE RecRef.NUMBER OF
+            //B2BJM >>
+            Database::Item:
+                begin
+                    RecRef.SetTable(Item);
+                    IF Item."Approval Status" = Item."Approval Status"::Released THEN
+                        EXIT;
+                    Item."Approval Status" := Item."Approval Status"::Released;
+                    Item.Modify(true);
+                    Handled := true;
+                end;
+end; 
+
+  [EventSubscriber(ObjectType::Codeunit, Codeunit::"Workflow Response Handling", 'OnOpenDocument', '', false, false)]
+    local procedure OnOpenDocument(RecRef: RecordRef; var Handled: Boolean)
+    var
+        Item: Record Item;
+        Customer: Record Customer;
+        Vendor: Record Vendor;
+        GenJnlLine: Record "Gen. Journal Line";
+        Variant: Variant;
+    begin
+        //RecRef.GetTable(Variant);
+        CASE RecRef.NUMBER OF
+            //B2BJM >>
+            Database::Item:
+                begin
+                    RecRef.SetTable(Item);
+                    IF Item."Approval Status" = Item."Approval Status"::Open THEN
+                        EXIT;
+                    Item."Approval Status" := Item."Approval Status"::Open;
+                    Vendor.Modify(true);
+                    Handled := true;
+                end;
+End;
+
+ [EventSubscriber(ObjectType::Codeunit, Codeunit::"Approvals Mgmt.", OnApproveApprovalRequest, '', false, false)]
+    local procedure OnApproveApprovalRequest(var ApprovalEntry: Record "Approval Entry")
+    begin
+        UpdateApprovalStatus(ApprovalEntry);
+    end;
+
+  [EventSubscriber(ObjectType::Codeunit, Codeunit::"Approvals Mgmt.", OnAfterRejectSelectedApprovalRequest, '', false, false)]
+    local procedure OnAfterRejectSelectedApprovalRequest(var ApprovalEntry: Record "Approval Entry")
+    begin
+        UpdateApprovalStatus(ApprovalEntry);
+    end;
+
+ [EventSubscriber(ObjectType::Codeunit, Codeunit::"Approvals Mgmt.", OnAfterDelegateSelectedApprovalRequest, '', false, false)]
+    local procedure OnAfterDelegateSelectedApprovalRequest(var ApprovalEntry: Record "Approval Entry")
+    begin
+        UpdateApprovalStatus(ApprovalEntry);
+    end;
