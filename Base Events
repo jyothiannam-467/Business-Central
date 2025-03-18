@@ -1,3 +1,17 @@
+Purchase Order - Vendor Ledger Entry
+_____________________________________
+
+[EventSubscriber(ObjectType::Codeunit, Codeunit::"Purch - Post", OnBeforePostVendorEntry, '', false, false)]
+local procedure OnBeforePostVendorEntry(var GenJnlLine: Record "Gen. Journal Line"; var PurchHeader: Record "Purchase Header"; var TotalPurchLine: Record "Purchase Line"; var TotalPurchLineLCY: Record "Purchase Line"; PreviewMode: Boolean; CommitIsSupressed: Boolean; var GenJnlPostLine: Codeunit "Gen. Jnl.-Post Line"; var IsHandled: Boolean)
+begin
+end;
+ 
+[EventSubscriber(ObjectType::Codeunit, Codeunit::"Gen. Jnl.-Post Line", OnBeforeVendLedgEntryInsert, '', false, false)]
+local procedure OnBeforeVendorLedgerEntryInsert(var VendorLedgerEntry: Record "Vendor Ledger Entry"; var GenJournalLine: Record "Gen. Journal Line")
+begin
+End;
+ 
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 New-Mangaing New in Item Card 
 __________________________________
 
