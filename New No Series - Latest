@@ -1,0 +1,47 @@
+ NoSeriesCU: Codeunit "No. Series";
+
+https://yzhums.com/51184/
+-----------------------------------------------------------------------------------
+ trigger OnInsert();
+    begin
+        if "Spec ID" = '' then begin
+            QualitySetup.GET();
+            QualitySetup.TESTFIELD("Specification Nos.");
+            if NoSeriesCU.AreRelated(QualitySetup."Specification Nos.", xRec."No. Series") then
+                "No. Series" := xRec."No. Series";
+            "Spec ID" := NoSeriesCU.GetNextNo("No. Series");
+        end;
+    end;
+-----------------------------------------------------------------------------------
+
+  procedure AssistEdit(OldSpec: Record "Specification Header B2B"): Boolean;
+    begin
+        Spec := Rec;
+        QualitySetup.GET();
+        QualitySetup.TESTFIELD("Specification Nos.");
+        if NoSeriesCU.LookupRelatedNoSeries(QualitySetup."Specification Nos.", OldSpec."No. Series", Spec."No. Series") then begin
+            QualitySetup.GET();
+            QualitySetup.TESTFIELD("Specification Nos.");
+            Spec."Spec ID" := NoSeriesMgt.GetNextNo(Spec."No. Series");
+            //  NoSeriesMgt.GetNextNo(Spec."Spec ID");
+            Rec := Spec;
+            exit(true);
+        end;
+    end;
+------------------------------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------------------
+Page:-
+ field("Spec ID"; Rec."Spec ID")
+                {
+                    Importance = Promoted;
+                    ApplicationArea = all;
+                    ToolTip = 'Specification is a group of characteristics to be inspected of an item';
+                    trigger OnAssistEdit();
+                    begin
+                        if Rec.AssistEdit(xRec) then
+                            CurrPage.UPDATE();
+                    end;
+                }
+------------------------------------------------------------------------------------------
