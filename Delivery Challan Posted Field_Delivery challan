@@ -1,0 +1,26 @@
+   field(65009; "Delivery Challan Posted_New"; Integer)
+   {
+            FieldClass = FlowField;
+            CalcFormula = Count("Delivery Challan Header" WHERE("Prod. Order No." = FIELD("Prod. Order No."), "Prod. Order Line No." = FIELD("Prod. Order Line No.")));
+   }
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+   addafter("Delivery Challan Posted")
+   {
+            field("Delivery Challan Posted_New"; Rec."Delivery Challan Posted_New")
+            {
+                Caption = 'Delivery Challam Posted';
+                ApplicationArea = All;
+                trigger OnDrillDown()
+                var
+                    DeliveryChallanHeader: Record "Delivery Challan Header";
+                begin
+                    DeliveryChallanHeader.Reset();
+                    DeliveryChallanHeader.SetFilter("Prod. Order No.", Rec."Prod. Order No.");
+                    DeliveryChallanHeader.SetRange("Prod. Order Line No.", Rec."Prod. Order Line No.");
+
+                    Page.Run(Page::"Delivery Challan List", DeliveryChallanHeader);
+                    
+                end;
+          }
+ }
