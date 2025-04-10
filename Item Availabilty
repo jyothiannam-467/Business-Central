@@ -1,0 +1,114 @@
+ action(ExportToExcel)
+            {
+                Caption = 'ILE Availabilty';
+                Image = Excel;
+                ApplicationArea = All;
+                trigger OnAction()
+                begin
+                    if Confirm(Confirm_01_Lbl) then begin
+                        TempExcelBuffer.Reset();
+                        TempExcelBuffer.DeleteAll();
+                        CreateExcelHeaderILE();
+                        ExportToExcelILE();
+                        TempExcelBuffer.CreateNewBook(ReportFileName);
+                        TempExcelBuffer.WriteSheet(ReportFileName, CompanyName, UserId);
+                        TempExcelBuffer.CloseBook();
+                        TempExcelBuffer.SetFriendlyFilename(ReportFileName);
+                        TempExcelBuffer.OpenExcel();
+                    end;
+                End;
+            }
+
+
+local procedure EnterCell(RowNo: Integer; ColumnNo: Integer; CellValue: Variant; Bold: Boolean; Italic: Boolean; UnderLine: Boolean; NumberFormat: Text[30];
+       cellTypeP: Option Number,Text,Date,Time)
+    begin
+        TempExcelBuffer.Init;
+        TempExcelBuffer.Validate("Row No.", RowNo);
+        TempExcelBuffer.Validate("Column No.", ColumnNo);
+        TempExcelBuffer."Cell Value as Text" := Format(CellValue);
+        TempExcelBuffer.Formula := '';
+        TempExcelBuffer.Bold := Bold;
+        TempExcelBuffer.Italic := Italic;
+        TempExcelBuffer.Underline := UnderLine;
+        TempExcelBuffer.NumberFormat := NumberFormat;
+        TempExcelBuffer."Cell Type" := cellTypeP;
+        TempExcelBuffer.Insert;
+    end;
+
+
+    local procedure CreateExcelHeaderILE()
+    begin
+        EnterCell(1, 1, 'Posting Date', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 2, 'Entry Type', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 3, 'Document Type', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 4, 'Document No.', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 5, 'Item No.', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 6, 'Description', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 7, 'Location Code', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 8, 'Quantity', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 9, 'Reserved Quantity', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 10, 'Remaining Quantity', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 11, 'Invoiced Quantity', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 12, 'Serial No.', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 13, 'Lot No.', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 14, 'Sales Amount (Actual)', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 15, 'Cost Amount (Actual)', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 16, 'Cost Amount (Non-Invtbl.)', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 17, 'Open', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 18, 'Order Type', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+        EnterCell(1, 19, 'Entry No.', true, false, false, '', TempExcelBuffer."Cell Type"::Text);
+    end;
+
+    local procedure ExportToExcelILE()
+    var
+        TransferLine: Record "Transfer Line";
+        ILE: Record "Item Ledger Entry";
+        RowNo: Integer;
+        Window: Dialog;
+        ItemNo: Code[20];
+    begin
+        RowNo := 2;
+
+        TransferLine.Reset();
+        CurrPage.SetSelectionFilter(TransferLine);
+        TransferLine.SetCurrentKey("Item No.");
+        if TransferLine.FindSet() then
+            repeat
+                if (ItemNo <> TransferLine."Item No.") then begin
+                    Clear(ItemNo);
+                    ItemNo := TransferLine."Item No.";
+
+                    Window.Open(Msg_01_Lbl);
+
+                    ILE.Reset();
+                    ILE.SetRange("Item No.", TransferLine."Item No.");
+                    ILE.SetRange("Location Code", TransferLine."Transfer-from Code");
+                    ILE.SetFilter("Remaining Quantity", '<>%1', 0);
+                    if ILE.FindSet() then
+                        repeat
+                            EnterCell(RowNo, 1, ILE."Posting Date", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 2, ILE."Entry Type", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 3, ILE."Document Type", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 4, ILE."Document No.", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 5, ILE."Item No.", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 6, ILE.Description, false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 7, ILE."Location Code", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 8, ILE.Quantity, false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 9, ILE."Reserved Quantity", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 10, ILE."Remaining Quantity", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 11, ILE."Invoiced Quantity", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 12, ILE."Serial No.", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 13, ILE."Lot No.", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 14, ILE."Sales Amount (Actual)", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 15, ILE."Cost Amount (Actual)", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 16, ILE."Cost Amount (Non-Invtbl.)", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 17, ILE.Open, false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 18, ILE."Order Type", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            EnterCell(RowNo, 19, ILE."Entry No.", false, false, false, '', TempExcelBuffer."Cell Type"::Text);
+                            RowNo := RowNo + 1;
+                        Until ILE.Next() = 0;
+                end;
+            until TransferLine.Next() = 0;
+        Window.Close();
+    end;
