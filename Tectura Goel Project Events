@@ -1,0 +1,1464 @@
+codeunit 50009 "Event Subscriber"
+{
+    Permissions = tabledata "Sales Invoice Header" = rm;
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Header", OnUpdateSalesLineByChangedFieldName, '', false, false)]
+    local procedure OnUpdateSalesLineByChangedFieldName(SalesHeader: Record "Sales Header"; var SalesLine: Record "Sales Line"; ChangedFieldName: Text[100]; ChangedFieldNo: Integer; xSalesHeader: Record "Sales Header");
+    begin
+        //T15205 - Start
+        CASE ChangedFieldName OF
+            SalesLine.FIELDCAPTION("Cutting Charges for Flat"):
+                IF SalesLine.Type = SalesLine.Type::Item THEN
+                    SalesLine."Cutting Charges for Flat" := SalesHeader."Cutting Charges for Flat"
+                ELSE
+                    SalesLine."Cutting Charges for Flat" := 0;
+            SalesLine.FIELDCAPTION("Cutting Charges for Round"):
+                IF SalesLine.Type = SalesLine.Type::Item THEN
+                    SalesLine."Cutting Charges for Round" := SalesHeader."Cutting Charges for Round"
+                ELSE
+                    SalesLine."Cutting Charges for Round" := 0;
+        //T15205 - Stop    
+        end;
+    end;
+
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Header", OnAfterCheckSellToCust, '', false, false)]
+    local procedure OnAfterCheckSellToCust(var SalesHeader: Record "Sales Header"; xSalesHeader: Record "Sales Header"; Customer: Record Customer; CurrentFieldNo: Integer);
+    VAR
+        Text50000: Label 'GST Customer Type should not be blank for customer %1';
+        Text50001: Label 'Phone No. or Email Id is mandatory in the Customer No. %1 to create a sales transaction.';
+    begin
+
+        //T17481_10thAug2020_Start
+        IF (Customer."Phone No." = '') AND (Customer."E-Mail" = '') THEN
+            ERROR(Text50001, Customer."No.");
+        //T17481_10thAug2020_Stop
+
+        // TEC.SUPP #7520 JP--
+        IF Customer."GST Customer Type" = Customer."GST Customer Type"::" " THEN
+            ERROR(Text50000, Customer."No.");
+        // TEC.SUPP #7520 JP++
+
+    end;
+
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Header", OnCopySellToCustomerAddressFieldsFromCustomerOnBeforeUpdateLocation, '', false, false)]
+    local procedure OnCopySellToCustomerAddressFieldsFromCustomerOnBeforeUpdateLocation(var SalesHeader: Record "Sales Header"; var SellToCustomer: Record Customer; var IsHandled: Boolean);
+    begin
+        //T15205 - Start
+        SalesHeader.VALIDATE("Transport Method", SellToCustomer."Transport Method");
+        SalesHeader."Cutting Charges for Flat" := SellToCustomer."Cutting Charges for Flat";
+        SalesHeader."Cutting Charges for Round" := SellToCustomer."Cutting Charges for Round";
+        SalesHeader."Cutting Charges Mandatory" := SellToCustomer."Cutting Charges Mandatory";
+        //T15205 - Stop    
+
+        SalesHeader."GST Without Payment of Duty" := SellToCustomer."GST without payment of Duty";
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Header", OnAfterSetFieldsBilltoCustomer, '', false, false)]
+    local procedure OnAfterSetFieldsBilltoCustomer(var SalesHeader: Record "Sales Header"; Customer: Record Customer; xSalesHeader: Record "Sales Header"; SkipBillToContact: Boolean; CUrrentFieldNo: Integer);
+    begin
+        SalesHeader."GST Without Payment of Duty" := Customer."GST without payment of Duty";
+    end;
+
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Line", OnAfterAssignItemValues, '', false, false)]
+    local procedure OnAfterAssignItemValues(var SalesLine: Record "Sales Line"; Item: Record Item; SalesHeader: Record "Sales Header");
+    var
+        GLSetup: Record "General Ledger Setup";
+        Customer: Record Customer;
+    begin
+        IF NOT SalesLine."Retain Sales Price" THEN //T18542_12thNov2020
+            SalesLine."Description 2" := Item."Description 2";
+        // else
+        //     SalesLine."Description 2" := '';
+        //T18509_4thNov2020_Start
+        GLSetup.GET;
+        IF (SalesHeader."Document Type" = SalesHeader."Document Type"::Order) THEN BEGIN
+            IF (SalesHeader."Customer Posting Group" = 'DOMESTIC') THEN BEGIN
+                SalesLine.VALIDATE("TCS Nature of Collection", GLSetup."TCS Sales Nature");
+            END;
+        END;
+        //T18509_4thNov2020_Stop    
+
+        //AD_GSC-003
+        SalesLine."Variant Group Type" := Item."Variant Group Type";
+        //AD_GSC-003
+
+        //T26684 13032023 Begin
+        Customer.RESET;
+        Customer.GET(SalesLine."Sell-to Customer No.");
+        IF Customer."Exemption GST %" THEN BEGIN
+            IF Customer."Exemption GST Group Code" <> '' THEN
+                SalesLine."GST Group Code" := Customer."Exemption GST Group Code";
+        END;
+        //T26684 13032023 Begin                        
+    end;
+
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Line", OnValidateNoOnAfterUpdateUnitPrice, '', false, false)]
+    local procedure OnValidateNoOnAfterUpdateUnitPrice(var SalesLine: Record "Sales Line"; xSalesLine: Record "Sales Line"; var TempSalesLine: Record "Sales Line" temporary);
+    var
+        SaleHeader: Record "Sales Header";
+        SalesPrice: Record "Sales Price-GSC";
+    begin
+        //T24242 16MAY2022 -
+        IF SalesLine."Job Work" = FALSE THEN BEGIN
+            IF SalesLine.Type = SalesLine.Type::"G/L Account" THEN BEGIN
+                IF SaleHeader.GET(SalesLine."Document Type", SalesLine."Document No.") THEN;
+                SalesPrice.RESET;
+                SalesPrice.SETRANGE("Sales Type", SalesPrice."Sales Type"::Customer);
+                SalesPrice.SETRANGE("Sales Code", SalesLine."Sell-to Customer No.");
+                SalesPrice.SETRANGE("G/L Account No.", SalesLine."No.");
+                SalesPrice.SETFILTER("Starting Date", '<=%1', SaleHeader."Posting Date");
+                SalesPrice.SETFILTER("Ending Date", '>=%1', SaleHeader."Posting Date");
+                IF SalesPrice.FINDSET THEN
+                    SalesLine.VALIDATE("Unit Price", SalesPrice."G/L Unit Price");
+            END;
+        END;
+        //T24242 16MAY2022 +        
+    end;
+
+    //04122024>>
+    [EventSubscriber(ObjectType::Table, Database::"Purchase Line", OnAfterUpdateUnitCost, '', false, false)]
+    local procedure OnAfterUpdateUnitCost(PurchHeader: Record "Purchase Header"; var PurchLine: Record "Purchase Line");
+    var
+        PurchasePrice: Record "Purchase Price-GSC";
+    begin
+        //IF PurchLine."Job Work" = FALSE THEN BEGIN
+        IF PurchLine.Type = PurchLine.Type::"G/L Account" THEN BEGIN
+            PurchasePrice.RESET;
+            PurchasePrice.SETRANGE("Vendor No.", PurchLine."Buy-from Vendor No.");
+            PurchasePrice.SETRANGE("Item No.", PurchLine."No.");
+            PurchasePrice.SETRANGE("Currency Code", PurchLine."Currency Code");
+            PurchasePrice.SETRANGE("Variant Code", PurchLine."Variant Code");
+            PurchasePrice.SETFILTER("Starting Date", '<=%1', PurchHeader."Posting Date");
+            PurchasePrice.SETFILTER("Ending Date", '>=%1', PurchHeader."Posting Date");
+            IF PurchasePrice.FINDSET THEN
+                PurchLine.VALIDATE("Unit Cost", PurchasePrice."Direct Unit Cost");
+        END;
+        // END;  
+    end;
+    //04122024<<
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Line", OnValidateQuantityOnBeforeCheckAssocPurchOrder, '', false, false)]
+    local procedure OnValidateQuantityOnBeforeCheckAssocPurchOrder(var SalesLine: Record "Sales Line"; CurrentFieldNo: Integer);
+    begin
+        //AD_GSC-003
+        SalesLine.TESTFIELD("Short Closed Quantity", 0); //AD_GSC-004
+        IF CurrentFieldNo = SalesLine.FIELDNO(SalesLine.Quantity) THEN
+            GSCProcess.CheckSalesLineTolerance(SalesLine, SalesLine.Quantity);
+        SalesLine.VALIDATE("Variant Group Code");
+        //AD_GSC-003        
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Line", OnValidateVariantCodeOnAfterChecks, '', false, false)]
+    local procedure OnValidateVariantCodeOnAfterChecks(var SalesLine: Record "Sales Line"; xSalesLine: Record "Sales Line"; CallingFieldNo: Integer);
+    begin
+        GSCProcess.UpdateDimensionsInSalesLine(SalesLine); //AD_Tec
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Line", OnBeforeTestStatusOpen, '', false, false)]
+    local procedure OnBeforeTestStatusOpen(var SalesLine: Record "Sales Line"; var SalesHeader: Record "Sales Header"; var IsHandled: Boolean; xSalesLine: Record "Sales Line"; CallingFieldNo: Integer; var StatusCheckSuspended: Boolean);
+    begin
+        IF NOT SalesLine."System-Created Entry" THEN
+            IF SalesLine.Type <> SalesLine.Type::" " THEN
+                IF SalesLine."Updated From Production" THEN
+                    StatusCheckSuspended := true;
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Line", OnAfterInitQtyToShip2, '', false, false)]
+    local procedure OnAfterInitQtyToShip2(var SalesLine: Record "Sales Line"; CurrFieldNo: Integer);
+    begin
+        //>>GSC-017
+        IF SalesLine."Qty. to Ship" <> 0 THEN
+            SalesLine."No. of Pieces to Ship" := SalesLine."Qty. to Ship" / SalesLine.Quantity * SalesLine."No. of Pieces"
+        ELSE
+            SalesLine."No. of Pieces to Ship" := 0;
+        //<<GSC-017
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Line", OnAfterInitHeaderDefaults, '', false, false)]
+    local procedure OnAfterInitHeaderDefaults(var SalesLine: Record "Sales Line"; SalesHeader: Record "Sales Header"; xSalesLine: Record "Sales Line");
+    var
+        GetCustomer: Record Customer;
+    begin
+        //AD_GSC-003
+        IF GetCustomer.GET(SalesHeader."Sell-to Customer No.") THEN BEGIN
+            SalesLine."Max. Tolerance %" := GetCustomer."Max. Tolerance %";
+            SalesLine."Min. Tolerance %" := GetCustomer."Min. Tolerance %";
+        END;
+        //AD_GSC-003
+
+        //T15205 - Start
+        IF SalesLine.Type = SalesLine.Type::Item THEN BEGIN
+            SalesLine."Cutting Charges for Flat" := SalesHeader."Cutting Charges for Flat";
+            SalesLine."Cutting Charges for Round" := SalesHeader."Cutting Charges for Round";
+        END;
+        //T15205 - Stop        
+    end;
+
+
+    [EventSubscriber(ObjectType::Table, Database::"Purchase Header", OnAfterCopyBuyFromVendorFieldsFromVendor, '', false, false)]
+    local procedure OnAfterCopyBuyFromVendorFieldsFromVendor(var PurchaseHeader: Record "Purchase Header"; Vendor: Record Vendor; xPurchaseHeader: Record "Purchase Header");
+    begin
+        //# GSC-011 -Start
+        PurchaseHeader."Manufacture Vendor No." := '';
+        PurchaseHeader."Vendor Type" := Vendor."Vendor Type";
+        IF (Vendor."Vendor Type" = Vendor."Vendor Type"::Manufacturer) OR (Vendor."Vendor Type" = Vendor."Vendor Type"::Importer) THEN
+            PurchaseHeader."Manufacture Vendor No." := PurchaseHeader."Buy-from Vendor No.";
+        //# GSC-011 -End    
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Purchase Line", OnAfterAssignItemValues, '', false, false)]
+    local procedure OnAfterAssignItemValues_PurchaseLine(var PurchLine: Record "Purchase Line"; Item: Record Item; CurrentFieldNo: Integer; PurchHeader: Record "Purchase Header");
+    begin
+        //GSC-013
+        PurchLine."Variant Group Type" := Item."Variant Group Type";
+        //GSC-013
+    end;
+    // //SN-T29650+
+    // [EventSubscriber(ObjectType::Table, Database::"Purchase Line", OnBeforeValidateQuantity, '', false, false)]
+    // local procedure OnBeforeValidateQuantity(var PurchaseLine: Record "Purchase Line"; var xPurchaseLine: Record "Purchase Line"; CurrentFieldNo: Integer; var IsHandled: Boolean)
+    // begin
+    //     IsHandled := true;
+    //     //# GSC-014 -Start
+    //     PurchaseLine.TESTFIELD("Short Closed Quantity", 0);
+    //     //# GSC-014 -End
+
+    //     //# GSC-011 -Start
+    //     IF CurrentFieldNo = PurchaseLine.FIELDNO(Quantity) THEN
+    //         GSCProcess.CheckPurchLineTolerance(PurchaseLine, PurchaseLine.Quantity);
+    //     PurchaseLine.VALIDATE("Variant Group Code");
+    //     if PurchaseLine."Variant Group Type" = PurchaseLine."Variant Group Type"::" " then
+    //         PurchaseLine.UpdateAmounts();
+    //     //# GSC-011 -End  
+    // end;
+    // //SN-T29650-
+
+
+    [EventSubscriber(ObjectType::Table, Database::"Purchase Line", OnValidateQuantityOnBeforeDropShptCheck, '', false, false)]
+    local procedure OnValidateQuantityOnBeforeDropShptCheck(var PurchaseLine: Record "Purchase Line"; xPurchaseLine: Record "Purchase Line"; CallingFieldNo: Integer; var IsHandled: Boolean);
+    begin
+        //# GSC-014 -Start
+        PurchaseLine.TESTFIELD("Short Closed Quantity", 0);
+        //# GSC-014 -End
+
+        //# GSC-011 -Start
+        IF CallingFieldNo = PurchaseLine.FIELDNO(Quantity) THEN
+            GSCProcess.CheckPurchLineTolerance(PurchaseLine, PurchaseLine.Quantity);
+        PurchaseLine.VALIDATE("Variant Group Code");
+        //# GSC-011 -End        
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Purchase Line", OnValidateVariantCodeOnAfterValidationChecks, '', false, false)]
+    local procedure OnValidateVariantCodeOnAfterValidationChecks(var PurchaseLine: Record "Purchase Line"; xPurchaseLine: Record "Purchase Line"; CallingFieldNo: Integer);
+    begin
+        //>>GSC-005
+        GSCProcess.UpdateDimensionsInPurchLine(PurchaseLine);
+        //<<GSC-005
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Purchase Line", OnValidateVariantCodeOnAfterUpdateItemReference, '', false, false)]
+    local procedure OnValidateVariantCodeOnAfterUpdateItemReference(var PurchaseLine: Record "Purchase Line"; CallingFeildNo: Integer);
+    var
+        Item: Record Item;
+    begin
+        //>>GSC-005
+        GSCProcess.CalculatePurchLineQty(PurchaseLine);
+
+        IF Item.GET(PurchaseLine."No.") THEN
+            PurchaseLine.Description := Item.Description;
+        //<<GSC-005
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Item Journal Line", OnValidateItemNoOnAfterCalcUnitCost, '', false, false)]
+    local procedure OnValidateItemNoOnAfterCalcUnitCost(var ItemJournalLine: Record "Item Journal Line"; Item: Record Item);
+    begin
+        //>>GSC-007
+        ItemJournalLine."Variant Group Type" := Item."Variant Group Type";
+        //<<GSC-007
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Item Journal Line", OnValidateQuantityOnBeforeGetUnitAmount, '', false, false)]
+    local procedure OnValidateQuantityOnBeforeGetUnitAmount(var ItemJournalLine: Record "Item Journal Line"; xItemJournalLine: Record "Item Journal Line"; CallingFieldNo: Integer);
+    begin
+        //>>GSC-07 -Start
+        IF ItemJournalLine."Phys. Inventory" THEN
+            GSCProcess.CalculatePhysInvtNoOfPcs(ItemJournalLine)
+        ELSE BEGIN
+            IF (ItemJournalLine.Quantity <> 0) AND (ItemJournalLine."Original Quantity" = 0) THEN
+                ItemJournalLine."Original Quantity" := ItemJournalLine.Quantity;
+            ItemJournalLine.VALIDATE("Variant Group Code");
+        END;
+        //<<GSC-007 -End        
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Shipment Line", OnAfterInsertInvLineFromShptLine, '', false, false)]
+    local procedure OnAfterInsertInvLineFromShptLine(var SalesLine: Record "Sales Line"; SalesOrderLine: Record "Sales Line"; var NextLineNo: Integer; SalesShipmentLine: Record "Sales Shipment Line");
+    var
+        SalesShipmentHeader: Record 110;
+        SalesInvHeader: Record "Sales Header";
+    begin
+        //TECGS.7.10.01 -Start
+        if SalesInvHeader.GET(SalesLine."Document Type", SalesLine."Document No.") then;
+        IF SalesShipmentHeader.GET(SalesShipmentLine."Document No.") THEN BEGIN
+            IF SalesInvHeader."DC No." = '' THEN BEGIN
+                SalesInvHeader."DC No." := SalesShipmentLine."Document No.";
+                SalesInvHeader."DC Date" := SalesShipmentHeader."Posting Date";
+            END;
+
+            //>>CR-083
+            //SalesInvHeader."Form Code" := SalesShipmentHeader."Form Code";
+            SalesInvHeader.VALIDATE("Ship-to Code", SalesShipmentHeader."Ship-to Code");
+            SalesInvHeader."Customer PO Date" := SalesShipmentHeader."Customer PO Date";
+            SalesInvHeader."External Document No." := SalesShipmentHeader."External Document No.";
+            //<<CR-083
+            SalesInvHeader.MODIFY;
+        END;
+        //TECGS.7.10.01 -End        
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Shipment Line", OnAfterInitFromSalesLine, '', false, false)]
+    local procedure OnAfterInitFromSalesLine(SalesShptHeader: Record "Sales Shipment Header"; SalesLine: Record "Sales Line"; var SalesShptLine: Record "Sales Shipment Line");
+    var
+        InvtSetup: Record "Inventory Setup";
+    begin
+        //CR-045  -Start
+        SalesShptLine."Originally Ordered No." := SalesLine."Originally Ordered No.";
+        //CR-045  -End
+        //# GSC-017 >>
+        //SalesShptLine."No. of Pieces" := TempSalesLine."No. of Pieces to Ship";
+        IF (SalesLine.Quantity = 0) OR (SalesLine."Qty. to Ship" = 0) THEN
+            SalesShptLine."No. of Pieces" := 0
+        ELSE BEGIN
+            InvtSetup.GET;
+            SalesShptLine."No. of Pieces" := ROUND((SalesLine."Qty. to Ship" / SalesLine.Quantity * SalesLine."No. of Pieces"),
+                                                      InvtSetup."Quantity Decimal Precision");
+        END;
+        //# GSC-017 <<        
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Invoice Line", OnAfterInitFromSalesLine, '', false, false)]
+    local procedure OnAfterInitFromSalesLine_SIL(var SalesInvLine: Record "Sales Invoice Line"; SalesInvHeader: Record "Sales Invoice Header"; SalesLine: Record "Sales Line");
+    begin
+        //CR-045  -Start
+        SalesInvLine."Original Order No." := SalesLine."Originally Ordered No.";
+        //CR-045  -End
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Prod. Order Line", OnValidateItemNoOnAfterAssignItemValues, '', false, false)]
+    local procedure OnValidateItemNoOnAfterAssignItemValues(var ProdOrderLine: Record "Prod. Order Line"; Item: Record Item; xProdOrderLine: Record "Prod. Order Line"; var IsHandled: Boolean);
+    begin
+        //TDK
+        //"Round Based On Length":= Item."Round Based On Length";
+        ProdOrderLine."Variant Group Type" := Item."Variant Group Type";
+        //TDK
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Prod. Order Line", OnBeforeDeleteRelations, '', false, false)]
+    local procedure OnBeforeDeleteRelations(var ProdOrderLine: Record "Prod. Order Line");
+    var
+        SLine: Record 37;
+        TLine: Record 5741;
+        ProdLine: Record 5406;
+    begin
+        //TDK>>>
+        IF NOT ProdOrderLine."Split Line" THEN BEGIN
+            ProdLine.RESET;
+            ProdLine.SETRANGE("Order No.", ProdOrderLine."Order No.");
+            ProdLine.SETRANGE("Order Line No.", ProdOrderLine."Order Line No.");
+            ProdLine.SETRANGE("Split Line", TRUE);
+            IF ProdLine.FINDSET THEN
+                ProdLine.DELETEALL(TRUE);
+
+            IF ProdOrderLine."Order Type" = ProdOrderLine."Order Type"::Sales THEN
+                IF SLine.GET(SLine."Document Type"::Order, ProdOrderLine."Order No.", ProdOrderLine."Order Line No.") THEN BEGIN
+                    SLine."Prod. Order No." := '';
+                    SLine."Prod. Order Line No." := 0;
+                    SLine.MODIFY;
+                END;
+            IF ProdOrderLine."Order Type" = ProdOrderLine."Order Type"::Transfer THEN
+                IF TLine.GET(ProdOrderLine."Order No.", ProdOrderLine."Order Line No.") THEN BEGIN
+                    TLine."Prod. Order No." := '';
+                    TLine."Prod. Order Line No." := 0;
+                    TLine.MODIFY;
+                END;
+
+        END;
+        //TDK<<<        
+    end;
+
+
+    [EventSubscriber(ObjectType::Table, Database::"Transfer Line", OnAfterAssignItemValues, '', false, false)]
+    local procedure OnAfterAssignItemValues_TL(var TransferLine: Record "Transfer Line"; Item: Record Item; TransferHeader: Record "Transfer Header");
+    begin
+        //>>GSC-017
+        TransferLine."Variant Group Type" := Item."Variant Group Type";
+        //<<GSC-017
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Transfer Line", OnBeforeTestStatusOpen, '', false, false)]
+    local procedure OnBeforeTestStatusOpen_TL(var TransferLine: Record "Transfer Line"; TransferHeader: Record "Transfer Header"; var IsHandled: Boolean);
+    begin
+        TransferLine.TESTFIELD("Document No.");
+        IF TransferHeader."No." <> TransferLine."Document No." THEN
+            TransferHeader.GET(TransferLine."Document No.");
+        IF TransferLine."Updated From Production" THEN //TDK    
+            IsHandled := true;
+    end;
+
+
+    var
+        GSCProcess: Codeunit "GSC Process";
+
+    ///////////////////////////////////////////////////CODEUNITS EVENTS>>>>>>>>>>>>>>>>>>>>>>>>////////////////////////////////
+
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Gen. Jnl.-Check Line", OnBeforeTestDocumentNo, '', false, false)]
+    local procedure OnBeforeTestDocumentNo(var GenJournalLine: Record "Gen. Journal Line"; var IsHandled: Boolean);
+    begin
+        //te-180816
+        CheckDivisionBalance(GenJournalLine);
+    end;
+
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Gen. Jnl.-Post Line", OnBeforeStartOrContinuePosting, '', false, false)]
+    local procedure OnBeforeStartOrContinuePosting(var Sender: Codeunit "Gen. Jnl.-Post Line"; var GenJnlLine: Record "Gen. Journal Line"; LastDocType: Option; LastDocNo: Code[20]; LastDate: Date; var NextEntryNo: Integer);
+    begin
+        //>>GSC-002
+        CheckDivisionBalance(GenJnlLine);
+        //<<GSC-002
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Gen. Jnl.-Post Line", OnAfterVendLedgEntryInsert, '', false, false)]
+    local procedure OnAfterVendLedgEntryInsert(var Sender: Codeunit "Gen. Jnl.-Post Line"; var VendorLedgerEntry: Record "Vendor Ledger Entry"; GenJournalLine: Record "Gen. Journal Line"; var DtldLedgEntryInserted: Boolean);
+    begin
+        // >> KKR-T25411
+        IF (GenJournalLine."Document Type" = GenJournalLine."Document Type"::Payment) AND (GenJournalLine."Bal. Account Type" = GenJournalLine."Bal. Account Type"::"Bank Account") THEN begin
+            VendorPaymentReceipt.SetParamMail(VendorLedgerEntry."Vendor No.", VendorLedgerEntry."Posting Date", VendorLedgerEntry."Document No.");
+        end;
+        // << KKR-T25411        
+    end;
+
+
+
+    PROCEDURE CheckDivisionBalance(GenJnlLine: Record 81)
+    VAR
+        GenJnlLineCheck: Record 81;
+        DebitAmt: Decimal;
+        CreditAmt: Decimal;
+        Err001: Label 'Debit & Credit not in balance for Division %1 in Document No. %2.';
+        Err002: Label 'Debit & Credit is Zero for Division %1 in Document No. %2.';
+        AmtP: Decimal;
+        AmtN: Decimal;
+    BEGIN
+        GenJnlLineCheck.SETRANGE("Journal Template Name");
+        GenJnlLineCheck.SETRANGE("Journal Batch Name");
+        GenJnlLineCheck.SETRANGE("Document No.");
+        GenJnlLineCheck.SETRANGE("Shortcut Dimension 1 Code");
+        GenJnlLineCheck.SETRANGE(Amount);
+
+        DebitAmt := 0;
+        CreditAmt := 0;
+
+        GenJnlLineCheck.SETRANGE("Journal Template Name", GenJnlLine."Journal Template Name");
+        GenJnlLineCheck.SETRANGE("Journal Batch Name", GenJnlLine."Journal Batch Name");
+        GenJnlLineCheck.SETRANGE("Document No.", GenJnlLine."Document No.");
+        IF GenJnlLineCheck.FINDSET THEN
+            REPEAT
+                IF GenJnlLine."Shortcut Dimension 1 Code" = GenJnlLineCheck."Shortcut Dimension 1 Code" THEN BEGIN
+                    IF GenJnlLine."Bal. Account No." = '' THEN BEGIN
+                        // {
+                        // DebitAmt += GenJnlLineCheck."Debit Amount";
+                        // CreditAmt += GenJnlLineCheck."Credit Amount";
+                        // }
+                        DebitAmt += ABS(GenJnlLineCheck."Amount (LCY)");
+                        CreditAmt += ABS(GenJnlLineCheck."Amount (LCY)");
+                    END ELSE BEGIN
+                        // {
+                        // DebitAmt += GenJnlLineCheck.Amount;
+                        // CreditAmt += GenJnlLineCheck.Amount;
+                        // }
+                        DebitAmt += GenJnlLineCheck."Amount (LCY)";
+                        CreditAmt += GenJnlLineCheck."Amount (LCY)";
+                    END;
+                END;
+            UNTIL GenJnlLineCheck.NEXT = 0;
+        //williams
+        IF DebitAmt <> CreditAmt THEN
+            ERROR(Err001, GenJnlLine."Shortcut Dimension 1 Code", GenJnlLine."Document No.");
+
+        IF ((DebitAmt = 0) AND (CreditAmt = 0)) THEN BEGIN
+            AmtP := 0;
+            AmtN := 0;
+            GenJnlLineCheck.SETRANGE("Journal Template Name");
+            GenJnlLineCheck.SETRANGE("Journal Batch Name");
+            GenJnlLineCheck.SETRANGE("Document No.");
+            GenJnlLineCheck.SETRANGE("Shortcut Dimension 1 Code");
+            GenJnlLineCheck.SETRANGE(Amount);
+
+            GenJnlLineCheck.SETRANGE("Journal Template Name", GenJnlLine."Journal Template Name");
+            GenJnlLineCheck.SETRANGE("Journal Batch Name", GenJnlLine."Journal Batch Name");
+            GenJnlLineCheck.SETRANGE("Document No.", GenJnlLine."Document No.");
+            GenJnlLineCheck.SETRANGE("Shortcut Dimension 1 Code", GenJnlLine."Shortcut Dimension 1 Code");
+
+            GenJnlLineCheck.SETRANGE(Amount);
+            GenJnlLineCheck.SETFILTER(Amount, '>%1', 0);
+            IF GenJnlLineCheck.FINDSET THEN
+                REPEAT
+                    AmtP += GenJnlLineCheck.Amount;
+                UNTIL GenJnlLineCheck.NEXT = 0;
+
+            GenJnlLineCheck.SETRANGE(Amount);
+            GenJnlLineCheck.SETFILTER(Amount, '<%1', 0);
+            IF GenJnlLineCheck.FINDSET THEN
+                REPEAT
+                    AmtN += GenJnlLineCheck.Amount;
+                UNTIL GenJnlLineCheck.NEXT = 0;
+            //williams
+            //    { IF ABS(AmtP) <> ABS(AmtN) THEN
+            //       ERROR(Err001,GenJnlLine."Shortcut Dimension 1 Code",GenJnlLine."Document No.");}
+        END;
+    END;
+
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Item Jnl.-Post Line", OnCodeOnBeforeCheckItemTracking, '', false, false)]
+    local procedure OnCodeOnBeforeCheckItemTracking(var ItemJnlLine: Record "Item Journal Line"; DisableItemTracking: Boolean; var IsHandled: Boolean; var TempTrackingSpecification: Record "Tracking Specification"; var ItemTrackingSetup: Record "Item Tracking Setup" temporary);
+    begin
+        //#TECNG-050716
+        IF ItemJnlLine."Select for Rejection" = TRUE THEN
+            ItemJnlLine.TESTFIELD("Rejection Reason Code");
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Item Jnl.-Post Line", OnAfterPostOutput, '', false, false)]
+    local procedure OnAfterPostOutput(var ItemLedgerEntry: Record "Item Ledger Entry"; var ProdOrderLine: Record "Prod. Order Line"; var ItemJournalLine: Record "Item Journal Line");
+    begin
+        //>>CR-062
+        IF (ProdOrderLine."Order No." <> '') AND (ProdOrderLine."Order Type" = ProdOrderLine."Order Type"::Sales) THEN
+            GSManufacturing.CreateReservationEntriesforSales(ProdOrderLine);
+        IF (ProdOrderLine."Order No." <> '') AND (ProdOrderLine."Order Type" = ProdOrderLine."Order Type"::Transfer) THEN
+            GSManufacturing.CreateReservationEntriesforTransfer(ProdOrderLine);
+        //>>CR-062        
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Item Jnl.-Post Line", OnBeforeProdOrderLineModify, '', false, false)]
+    local procedure OnBeforeProdOrderLineModify(var ProdOrderLine: Record "Prod. Order Line"; ItemJournalLine: Record "Item Journal Line"; ItemLedgEntryNo: Integer);
+    begin
+        //>>CR-082
+        ProdOrderLine.VALIDATE("Select for Posting", FALSE);
+        //<<CR-082
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Item Jnl.-Post Line", OnAfterUpdateProdOrderLine, '', false, false)]
+    local procedure OnAfterUpdateProdOrderLine(var ProdOrderLine: Record "Prod. Order Line"; ReTrack: Boolean; var ItemJournalLine: Record "Item Journal Line");
+    var
+        l_rec_ProdOrderLine: Record 5406;
+        l_rec_ProdOrder: Record 5405;
+        l_cde_ProdOrderStatusMgmt: Codeunit 5407;
+    begin
+        //>>CR-060
+        l_rec_ProdOrderLine.RESET;
+        l_rec_ProdOrderLine.SETRANGE(Status, ProdOrderLine.Status);
+        l_rec_ProdOrderLine.SETRANGE("Prod. Order No.", ProdOrderLine."Prod. Order No.");
+        l_rec_ProdOrderLine.SETFILTER("Remaining Quantity", '<>%1', 0);
+        IF NOT l_rec_ProdOrderLine.FINDFIRST THEN BEGIN
+            l_rec_ProdOrder.GET(ProdOrderLine.Status, ProdOrderLine."Prod. Order No.");
+            AutoFinishProdOrder(l_rec_ProdOrder);
+        END;
+        //<<CR-060        
+    end;
+
+    procedure AutoFinishProdOrder(ProdOrder: Record "Production Order")
+    var
+        l_cde_ProdOrderStatusMgmt: Codeunit 5407;
+        MfgSetup: Record "Manufacturing Setup";
+        NewStatus: Enum "Production Order Status";
+        NewPostingDate: Date;
+        Text000: Label '%2 %3  with status %1 has been changed to %4 %5 with status Finished.';
+    begin
+        MfgSetup.GET;
+        NewStatus := NewStatus::Finished;
+        NewPostingDate := TODAY;
+        l_cde_ProdOrderStatusMgmt.ChangeProdOrderStatus(ProdOrder, NewStatus, NewPostingDate, MfgSetup."Auto Updt Cost on Finish Order");
+        COMMIT;
+        MESSAGE(Text000, ProdOrder.Status, ProdOrder.TABLECAPTION, ProdOrder."No.", ProdOrder.TABLECAPTION, ProdOrder."No.");
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Item Jnl.-Post Line", OnItemQtyPostingOnBeforeApplyItemLedgEntry, '', false, false)]
+    local procedure OnItemQtyPostingOnBeforeApplyItemLedgEntry(var ItemJournalLine: Record "Item Journal Line"; var ItemLedgerEntry: Record "Item Ledger Entry");
+    var
+        Item: Record Item;
+    begin
+        if Item.get(ItemJournalLine."Item No.") then;
+        IF Item.Type = Item.Type::Inventory THEN
+            ItemLedgerEntry."Quote Offer Reservation" := FALSE; //T14638        
+    end;
+
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Item Jnl.-Post Line", OnAfterInitItemLedgEntry, '', false, false)]
+    local procedure OnAfterInitItemLedgEntry(var NewItemLedgEntry: Record "Item Ledger Entry"; var ItemJournalLine: Record "Item Journal Line"; var ItemLedgEntryNo: Integer);
+    begin
+        //T18682
+        //T18682
+        NewItemLedgEntry."Job Work Document No." := ItemJournalLine."Job Work Document No.";
+        NewItemLedgEntry."Job Work Document Line No." := ItemJournalLine."Job Work Document Line No.";
+        // NewItemLedgEntry."External Document No." := ItemJournalLine."External Document No.";//SN-T29364
+
+        //# GSC-017 >>
+        NewItemLedgEntry."Variant Group Code" := ItemJournalLine."Variant Group Code";
+        NewItemLedgEntry."Variant Group Type" := ItemJournalLine."Variant Group Type";
+        NewItemLedgEntry.Thickness := ItemJournalLine.Thickness;
+        NewItemLedgEntry.Width := ItemJournalLine.Width;
+        NewItemLedgEntry."Inner Diameter" := ItemJournalLine."Inner Diameter";
+        NewItemLedgEntry.Length := ItemJournalLine.Length;
+        NewItemLedgEntry."No. of Pieces" := ItemJournalLine."No. of Pieces";
+        NewItemLedgEntry."Outer Diameter" := ItemJournalLine."Outer Diameter";
+
+        //>>CR-047
+        //NewItemLedgEntry."Round Based On Length" := "Round Based On Length";
+        //<<CR-047
+
+        //# GSC-017 <<
+
+        //>>CR-073
+        IF ItemJournalLine."Entry Type" <> ItemJournalLine."Entry Type"::Purchase THEN
+            NewItemLedgEntry."Source Item Ledger Entry No." := ItemJournalLine."Source Item Ledger Entry No."
+        ELSE
+            NewItemLedgEntry."Source Item Ledger Entry No." := ItemLedgEntryNo;
+        //<<CR-073
+
+        //>>CR-088
+        NewItemLedgEntry."Split Status" := ItemJournalLine."Split Status";
+        //<<CR-088
+
+
+        //#TECNG-050716
+        NewItemLedgEntry."Select for Rejection" := ItemJournalLine."Select for Rejection";
+        NewItemLedgEntry."Rejection Reason Code" := ItemJournalLine."Rejection Reason Code";
+
+        IF ItemJournalLine."Document Type" IN [ItemJournalLine."Document Type"::"Sales Return Receipt"] THEN BEGIN
+            recIAE.RESET;
+            recIAE.SETRANGE("Outbound Item Entry No.", ItemJournalLine."Applies-from Entry");
+            recIAE.SETRANGE("Item Ledger Entry No.", ItemJournalLine."Applies-from Entry");
+            IF recIAE.FINDFIRST THEN BEGIN
+                recILE.GET(recIAE."Inbound Item Entry No.");
+                NewItemLedgEntry."Source Item Ledger Entry No." := recILE."Source Item Ledger Entry No."
+            END;
+        END;
+        //#TECNG-050716
+
+        //T14954_Make-Heat_26thDec2019_Start
+        IF ItemJournalLine."Entry Type" = ItemJournalLine."Entry Type"::Purchase THEN BEGIN
+            NewItemLedgEntry.Make := ItemJournalLine.Make;
+            NewItemLedgEntry."Heat No" := ItemJournalLine."Heat No";
+        END ELSE BEGIN
+            recILE2.RESET;
+            recILE2.SETRANGE(recILE2."Entry No.", ItemJournalLine."Source Item Ledger Entry No.");
+            IF recILE2.FINDFIRST THEN BEGIN
+                NewItemLedgEntry.Make := recILE2.Make;
+                NewItemLedgEntry."Heat No" := recILE2."Heat No";
+            END;
+        END;
+        //T14954_Make-Heat_26thDec2019_Stop
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Item Jnl.-Post Line", OnBeforeInsertCorrItemLedgEntry, '', false, false)]
+    local procedure OnBeforeInsertCorrItemLedgEntry(var NewItemLedgerEntry: Record "Item Ledger Entry"; var OldItemLedgerEntry: Record "Item Ledger Entry"; var ItemJournalLine: Record "Item Journal Line");
+    begin
+        //>>IR-053
+        NewItemLedgerEntry."No. of Pieces" := -OldItemLedgerEntry."No. of Pieces";
+        //<<IR-053        
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Sales-Post", OnPostSalesLineOnBeforePostItemTrackingLine, '', false, false)]
+    local procedure OnPostSalesLineOnBeforePostItemTrackingLine(var Sender: Codeunit "Sales-Post"; var SalesHeader: Record "Sales Header"; var SalesLine: Record "Sales Line"; WhseShip: Boolean; WhseReceive: Boolean; InvtPickPutaway: Boolean; SalesInvHeader: Record "Sales Invoice Header"; SalesCrMemoHeader: Record "Sales Cr.Memo Header"; var ItemLedgShptEntryNo: Integer; var RemQtyToBeInvoiced: Decimal; var RemQtyToBeInvoicedBase: Decimal; GenJnlLineDocNo: Code[20]; SrcCode: Code[10]);
+    begin
+        //#T8610 Start
+        IF SalesLine."Document Type" = SalesLine."Document Type"::Order THEN BEGIN
+            Itemtrack.RESET;
+            Itemtrack.SETRANGE(Itemtrack."Source Type", 37);
+            Itemtrack.SETRANGE(Itemtrack."Source ID", SalesLine."Document No.");
+            Itemtrack.SETRANGE(Itemtrack."Source Ref. No.", SalesLine."Line No.");
+            IF Itemtrack.FINDSET THEN
+                REPEAT
+                    IF ((Itemtrack."Qty. to Handle (Base)") <> SalesLine."Qty. to Ship (Base)") THEN BEGIN
+                        ERROR(Text50005, ABS(Itemtrack."Qty. to Handle (Base)"), SalesLine."Document No.", SalesLine."Line No.", ABS(SalesLine."Qty. to Ship (Base)"));
+                    END;
+                UNTIL Itemtrack.NEXT = 0;
+        END;
+        //#T8610 End        
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Sales-Post", OnBeforeSalesShptLineInsert, '', false, false)]
+    local procedure OnBeforeSalesShptLineInsert(var SalesShptLine: Record "Sales Shipment Line"; SalesShptHeader: Record "Sales Shipment Header"; SalesLine: Record "Sales Line"; CommitIsSuppressed: Boolean; PostedWhseShipmentLine: Record "Posted Whse. Shipment Line"; SalesHeader: Record "Sales Header"; WhseShip: Boolean; WhseReceive: Boolean; ItemLedgShptEntryNo: Integer; xSalesLine: Record "Sales Line"; var TempSalesLineGlobal: Record "Sales Line" temporary; var IsHandled: Boolean);
+    begin
+        //TECGS.7.10.01 GSC-019 >>>>
+        SHNos.RESET;
+        SHNos.SETRANGE("Document No.", TempSalesLineGlobal."Document No.");
+        SHNos.SETRANGE("Document Line No.", TempSalesLineGlobal."Line No.");
+        SHNos.SETRANGE(Posted, FALSE);
+        IF SHNos.FINDSET THEN
+            REPEAT
+                SHNos.Posted := TRUE;
+                SHNos."Shipment No." := SalesShptLine."Document No.";
+                SHNos."Shipment Line No." := SalesShptLine."Line No.";
+                SHNos.MODIFY;
+                IF PHNos.GET(PHNos."Document Type"::Order, SHNos."Purchase Document No.", SHNos."Purchase Document Line No.", SHNos."Purchase Heat Line No.") THEN BEGIN
+                    PHNos."Remaining Quantity" := PHNos."Remaining Quantity" - SHNos.Quantity;
+                    PHNos.MODIFY;
+                END;
+            UNTIL SHNos.NEXT = 0;
+        //TECGS.7.10.01 GSC-019 <<<<        
+    end;
+
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Sales-Post", OnPostUpdateOrderLineOnBeforeGetQuantityShipped, '', false, false)]
+    local procedure OnPostUpdateOrderLineOnBeforeGetQuantityShipped(TempSalesLine: Record "Sales Line"; var IsHandled: Boolean);
+    begin
+        //# GSC-017 >>
+        //SalesLine."No. of Pieces Shipped" := SalesLine."No. of Pieces Shipped" + SalesLine."No. of Pieces to Ship";
+        InvtSetup.GET;
+        TempSalesLine."No. of Pieces Shipped" := ROUND((TempSalesLine."Quantity Shipped" / TempSalesLine.Quantity * TempSalesLine."No. of Pieces"),
+                                                InvtSetup."Quantity Decimal Precision");
+        TempSalesLine."No. of Pieces to Ship" := TempSalesLine."No. of Pieces" - TempSalesLine."No. of Pieces Shipped";
+        //# GSC-017 <<        
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Item Journal Line", OnAfterCopyItemJnlLineFromSalesLine, '', false, false)]
+    local procedure OnAfterCopyItemJnlLineFromSalesLine(var ItemJnlLine: Record "Item Journal Line"; SalesLine: Record "Sales Line");
+    var
+        l_rec_RG23RefEntry: record 50006;
+    begin
+        //# GSC-017 >>
+        ItemJnlLine."Variant Group Code" := SalesLine."Variant Group Code";
+        ItemJnlLine."Variant Group Type" := SalesLine."Variant Group Type";
+        ItemJnlLine.Length := SalesLine.Length;
+        ItemJnlLine.Thickness := SalesLine.Thickness;
+        ItemJnlLine.Width := SalesLine.Width;
+        ItemJnlLine."Inner Diameter" := SalesLine."Inner Diameter";
+        ItemJnlLine."Outer Diameter" := SalesLine."Outer Diameter";
+        //ItemJnlLine."No. of Pieces" := "No. of Pieces to Ship";
+        InvtSetup.GET;
+        IF SalesLine."Document Type" <> SalesLine."Document Type"::"Return Order" THEN
+            ItemJnlLine."No. of Pieces" := ROUND((SalesLine."Qty. to Ship" / SalesLine.Quantity * SalesLine."No. of Pieces"),
+                                                  InvtSetup."Quantity Decimal Precision")
+        ELSE
+            ItemJnlLine."No. of Pieces" := SalesLine."No. of Pieces";
+        //# GSC-017 <<
+
+        //>>CR-073
+        l_rec_RG23RefEntry.RESET;
+        l_rec_RG23RefEntry.SETRANGE("Document No.", SalesLine."Document No.");
+        l_rec_RG23RefEntry.SETRANGE("Document Line No.", SalesLine."Line No.");
+        IF l_rec_RG23RefEntry.FINDFIRST THEN
+            ItemJnlLine."Source Item Ledger Entry No." := l_rec_RG23RefEntry."Source Item Ledger Entry No.";
+        //<<CR-073
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Purch.-Post", OnAfterCheckMandatoryFields, '', false, false)]
+    local procedure OnAfterCheckMandatoryFields(var PurchaseHeader: Record "Purchase Header"; CommitIsSupressed: Boolean);
+    begin
+
+        CheckHeatNosQuantity(PurchaseHeader); //TECGS.7.10.01 GSC-019
+        //>>CR-068
+        // IF (PurchaseHeader."Document Type" = PurchaseHeader."Document Type"::Invoice) AND (PurchaseHeader.Trading) THEN BEGIN
+        //     g_rec_PurchLine.RESET;
+        //     g_rec_PurchLine.SETRANGE("Document Type", PurchaseHeader."Document Type");
+        //     g_rec_PurchLine.SETRANGE("Document No.", PurchaseHeader."No.");
+        //     g_rec_PurchLine.SETFILTER("Qty. to Receive", '>%1', 0);
+        //     g_rec_PurchLine.SETFILTER("Excise Amount", '>%1', 0);
+        //     IF g_rec_PurchLine.FINDSET THEN
+        //         REPEAT
+        //             g_rec_PurchLine.TESTFIELD(PurchaseHeader."Excise Tariff No.");
+        //         UNTIL g_rec_PurchLine.NEXT = 0;
+        // END;
+        //<<CR-068
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Purch.-Post", OnInsertReceiptLineOnAfterInitPurchRcptLine, '', false, false)]
+    local procedure OnInsertReceiptLineOnAfterInitPurchRcptLine(var PurchRcptLine: Record "Purch. Rcpt. Line"; PurchLine: Record "Purchase Line"; ItemLedgShptEntryNo: Integer; xPurchLine: Record "Purchase Line"; var PurchRcptHeader: Record "Purch. Rcpt. Header"; var CostBaseAmount: Decimal; PostedWhseRcptHeader: Record "Posted Whse. Receipt Header"; WhseRcptHeader: Record "Warehouse Receipt Header"; var WhseRcptLine: Record "Warehouse Receipt Line");
+    begin
+        //TECGS.7.10.01 GSC-019>>>>
+        PHNos.RESET;
+        PHNos.SETRANGE("Document No.", PurchLine."Document No.");
+        PHNos.SETRANGE("Document Line No.", PurchLine."Line No.");
+        PHNos.SETRANGE(Posted, FALSE);
+        IF PHNos.FINDSET THEN
+            REPEAT
+                PHNos.Posted := TRUE;
+                PHNos."GRN No." := PurchRcptLine."Document No.";
+                PHNos."GRN Line No." := PurchRcptLine."Line No.";
+                PHNos.MODIFY;
+            UNTIL PHNos.NEXT = 0;
+        //TECGS.7.10.01 GSC-019<<<<
+        //# GSC-017 >>
+        InvtSetup.GET;
+        PurchRcptLine."No. of Pieces" := ROUND((PurchLine."Qty. to Receive" / PurchLine.Quantity * PurchLine."No. of Pieces"),
+                                                InvtSetup."Quantity Decimal Precision");
+        //# GSC-017 <<        
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Purch.-Post", OnPostUpdateOrderLineOnPurchHeaderReceive, '', false, false)]
+    local procedure OnPostUpdateOrderLineOnPurchHeaderReceive(var TempPurchLine: Record "Purchase Line"; PurchRcptHeader: Record "Purch. Rcpt. Header");
+    begin
+        InvtSetup.GET;
+        //SalesLine."No. of Pieces Shipped" := SalesLine."No. of Pieces Shipped" + SalesLine."No. of Pieces to Ship";
+        TempPurchLine."No of Piece Received" := ROUND((TempPurchLine."Quantity Received" / TempPurchLine.Quantity * TempPurchLine."No. of Pieces"),
+                                                InvtSetup."Quantity Decimal Precision");
+        TempPurchLine."No of Piece to Receive" := TempPurchLine."No. of Pieces" - TempPurchLine."No of Piece Received";
+        //# GSC-017 <<
+
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Item Journal Line", OnAfterCopyItemJnlLineFromPurchLine, '', false, false)]
+    local procedure OnAfterCopyItemJnlLineFromPurchLine(var ItemJnlLine: Record "Item Journal Line"; PurchLine: Record "Purchase Line");
+    begin
+        //# GSC-017 >>
+        ItemJnlLine."Variant Group Code" := PurchLine."Variant Group Code";
+        ItemJnlLine."Variant Group Type" := PurchLine."Variant Group Type";
+        ItemJnlLine.Thickness := PurchLine.Thickness;
+        ItemJnlLine.Width := PurchLine.Width;
+        ItemJnlLine."Inner Diameter" := PurchLine."Inner Diameter";
+        ItemJnlLine.Length := PurchLine.Length;
+        ItemJnlLine."Outer Diameter" := PurchLine."Outer Diameter";
+        InvtSetup.GET;
+        ItemJnlLine."No. of Pieces" := ROUND((PurchLine."Qty. to Receive" / PurchLine.Quantity * PurchLine."No. of Pieces"),
+                                                InvtSetup."Quantity Decimal Precision");
+        //# GSC-017 <<
+        //>>CR-088
+        ItemJnlLine."Split Status" := PurchLine."Split Status";
+        //<<CR-088
+        //T14954_Make-Heat_26thDec2019_Start
+        ItemJnlLine.Make := PurchLine.Make;
+        ItemJnlLine."Heat No" := PurchLine."Heat No";
+        //T14954_Make-Heat_26thDec2019_Stop        
+    end;
+
+    PROCEDURE CheckHeatNosQuantity(PHdr: Record 38)
+    VAR
+        PurLine: Record 39;
+        REntry: Record 337;
+        PHeatNos: Record 50002;
+        HQty: Decimal;
+        RVend: Record 23;
+        Text50001: Label 'Total Heat Nos Quantity and Lot Quanity should be same for Lot No. %1';
+        Text50002: Label 'Heat No. details does not exist for Lot No. %1';
+        Text50003: Label 'Test Certificate Attachment is mandatory for Document No. %1';
+        Text50004: Label 'Heat No. details does not exist for GRN No. %1 Line No. %2';
+    BEGIN
+        WITH PHdr DO BEGIN
+            RVend.GET("Buy-from Vendor No.");
+            IF "Document Type" = "Document Type"::Order THEN BEGIN
+                PurLine.RESET;
+                PurLine.SETRANGE("Document Type", "Document Type");
+                PurLine.SETRANGE("Document No.", "No.");
+                PurLine.SETFILTER("Qty. to Receive", '<>%1', 0);
+                IF PurLine.FINDSET THEN
+                    REPEAT
+                        REntry.RESET;
+                        REntry.SETRANGE("Source Type", 39);
+                        REntry.SETRANGE("Source ID", "No.");
+                        REntry.SETRANGE("Source Ref. No.", PurLine."Line No.");
+                        IF REntry.FINDSET THEN
+                            REPEAT
+                                CLEAR(HQty);
+                                PHeatNos.RESET;
+                                PHeatNos.SETRANGE("Document No.", "No.");
+                                PHeatNos.SETRANGE("Document Line No.", REntry."Source Ref. No.");
+                                PHeatNos.SETRANGE("Lot No.", REntry."Lot No.");
+                                PHeatNos.SETRANGE(Posted, FALSE);
+                                IF PHeatNos.FINDSET THEN
+                                    REPEAT
+                                        HQty += PHeatNos.Quantity;
+                                    UNTIL PHeatNos.NEXT = 0;
+                                IF (RVend."Heat No. Applicable" = RVend."Heat No. Applicable"::"Before Receipt") AND (HQty = 0) THEN
+                                    ERROR(Text50002, REntry."Lot No.");
+                                IF (HQty <> 0) AND (HQty <> REntry."Qty. to Handle (Base)") THEN
+                                    ERROR(Text50001, REntry."Lot No.");
+                            UNTIL REntry.NEXT = 0;
+                    UNTIL PurLine.NEXT = 0;
+            END;
+            IF "Document Type" = "Document Type"::Invoice THEN BEGIN
+                //IF (RVend."Test Certificate Applicable" = RVend."Test Certificate Applicable"::"With Invoice") THEN BEGIN
+                PurLine.RESET;
+                PurLine.SETRANGE("Document Type", "Document Type");
+                PurLine.SETRANGE("Document No.", "No.");
+                PurLine.SETRANGE(Type, PurLine.Type::Item);
+                PurLine.SETFILTER(Quantity, '<>%1', 0);
+                IF PurLine.FINDSET THEN
+                    REPEAT
+                        PHeatNos.RESET;
+                        PHeatNos.SETRANGE("GRN No.", PurLine."Receipt No.");
+                        PHeatNos.SETRANGE("GRN Line No.", PurLine."Receipt Line No.");
+                        IF PHeatNos.FINDSET THEN BEGIN
+                            REPEAT
+                                IF (PHeatNos."Attachment No." = 0) AND (RVend."Test Certificate Applicable" = RVend."Test Certificate Applicable"::"With Invoice") THEN
+                                    ERROR(Text50003, "No.");
+                            UNTIL PHeatNos.NEXT = 0;
+                        END ELSE BEGIN
+                            IF (RVend."Test Certificate Applicable" = RVend."Test Certificate Applicable"::"With Invoice") THEN
+                                ERROR(Text50003, "No.");
+                            IF (RVend."Heat No. Applicable" = RVend."Heat No. Applicable"::"Before Invoice") THEN
+                                ERROR(Text50004, PurLine."Receipt No.", PurLine."Receipt Line No.");
+                        END;
+                    UNTIL PurLine.NEXT = 0;
+                //END;
+            END;
+        END;
+    END;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Blanket Purch. Order to Order", OnBeforePurchOrderHeaderModify, '', false, false)]
+    local procedure OnBeforePurchOrderHeaderModify(var PurchOrderHeader: Record "Purchase Header"; BlanketOrderPurchHeader: Record "Purchase Header");
+    begin
+        //GOEL1.00**Upgrade**300319**KMP
+        PurchOrderHeader."GST Order Address State" := BlanketOrderPurchHeader."GST Order Address State";
+        PurchOrderHeader."Vendor GST Reg. No." := BlanketOrderPurchHeader."Vendor GST Reg. No.";
+        PurchOrderHeader."Location State Code" := BlanketOrderPurchHeader."Location State Code";
+        PurchOrderHeader."Location GST Reg. No." := BlanketOrderPurchHeader."Location GST Reg. No.";
+        PurchOrderHeader."Order Address GST Reg. No." := BlanketOrderPurchHeader."Order Address GST Reg. No.";
+        //GOEL1.00**Upgrade**300319**KMP        
+    end;
+
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Release Sales Document", OnAfterReleaseATOs, '', false, false)]
+    local procedure OnAfterReleaseATOs(var SalesHeader: Record "Sales Header"; var SalesLine: Record "Sales Line"; PreviewMode: Boolean);
+    begin
+        //>>GSC-017
+        //IF "Document Type"= "Document Type"::Order THEN BEGIN //T18694_4thJan2021_Commented
+        IF (SalesHeader."Document Type" = SalesHeader."Document Type"::Order) OR (SalesHeader."Document Type" = SalesHeader."Document Type"::Quote) THEN BEGIN //T18694_4thJan2021_Added
+            GSCProcess.CreateItemVariantCode(SalesHeader);
+            GSCProcess.CalculateFromReleaseRateperPiece(SalesHeader);
+        END;
+        //<<GSC-017        
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Release Purchase Document", OnCodeOnBeforeModifyHeader, '', false, false)]
+    local procedure OnCodeOnBeforeModifyHeader(var PurchaseHeader: Record "Purchase Header"; var PurchaseLine: Record "Purchase Line"; PreviewMode: Boolean; var LinesWereModified: Boolean);
+    begin
+        //# GSC-017 -Start
+        IF PurchaseHeader."Document Type" = PurchaseHeader."Document Type"::Order THEN BEGIN
+            //# GSC-011 -Start
+            PurchaseHeader."Allow Quantity Change" := FALSE;
+            //# GSC-011 -End
+            GSCProcess.CreateItemVariantCodeOnPurchase(PurchaseHeader);
+        END;
+        //# GSC-017 -End        
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::ArchiveManagement, OnAfterTransferFromArchToSalesLine, '', false, false)]
+    local procedure OnAfterTransferFromArchToSalesLine(var SalesLine: Record "Sales Line"; var SalesLineArchive: Record "Sales Line Archive");
+    begin
+        SalesLine.COPYLINKS(SalesLineArchive);
+        //>>GSC-005
+        SalesLine.VALIDATE("Variant Group Code", SalesLineArchive."Variant Group Code");
+        SalesLine."Variant Group Type" := SalesLineArchive."Variant Group Type";
+        SalesLine.Length := SalesLineArchive.Length;
+        SalesLine.Width := SalesLineArchive.Width;
+        SalesLine.Thickness := SalesLineArchive.Thickness;
+        SalesLine."Inner Diameter" := SalesLineArchive."Inner Diameter";
+        SalesLine."Outer Diameter" := SalesLineArchive."Outer Diameter";
+        SalesLine.VALIDATE("No. of Pieces", SalesLineArchive."No. of Pieces");
+        //<<GSC-005        
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Output Jnl.-Expl. Route", OnRunOnAfterProdOrderRtngLineSetFiltersBeforeLoop, '', false, false)]
+    local procedure OnRunOnAfterProdOrderRtngLineSetFiltersBeforeLoop(var ProdOrderRoutingLine: Record "Prod. Order Routing Line"; var ProdOrderLine: Record "Prod. Order Line");
+    begin
+        //>>CR-082
+        ProdOrderLine.SETRANGE("Select for Posting", TRUE);
+        //<<CR-082        
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Output Jnl.-Expl. Route", OnBeforeOutputItemJnlLineInsert, '', false, false)]
+    local procedure OnBeforeOutputItemJnlLineInsert(var ItemJournalLine: Record "Item Journal Line"; LastOperation: Boolean);
+    VAR
+        ProdLine: Record 5406;
+    begin
+        //TDK>>>
+        ProdLine.GET(ProdLine.Status::Released, ItemJournalLine."Order No.", ItemJournalLine."Order Line No.");
+        ItemJournalLine."Variant Group Code" := ProdLine."Variant Group Code";
+        ItemJournalLine."Variant Group Type" := ProdLine."Variant Group Type";
+        ItemJournalLine.Thickness := ProdLine.Thickness;
+        ItemJournalLine.Width := ProdLine.Width;
+        ItemJournalLine."Inner Diameter" := ProdLine."Inner Diameter";
+        ItemJournalLine.Length := ProdLine.Length;
+        ItemJournalLine."No. of Pieces" := ProdLine."No. of Pieces";
+        ItemJournalLine."Outer Diameter" := ProdLine."Outer Diameter";
+        //TDK<<<
+        //>>CR-073
+        ItemJournalLine."Source Item Ledger Entry No." := ProdLine."Source Item Ledger Entry No.";
+        //<<CR-073
+        //#TEC-NG-050716
+        ItemJournalLine."Select for Rejection" := ProdLine."Select for Rejection";
+        ItemJournalLine."Rejection Reason Code" := ProdLine."Rejection Reason Code";
+        //#TEC-NG-050716
+        //>>CR-059
+        ItemJournalLine.VALIDATE("Dimension Set ID", ProdLine."Dimension Set ID");
+        //<<CR-059        
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Item Subst.", OnItemSubstGetOnAfterSubstSalesLineItem, '', false, false)]
+    local procedure OnItemSubstGetOnAfterSubstSalesLineItem(var SalesLine: Record "Sales Line"; var SourceSalesLine: Record "Sales Line"; var TempItemSubstitution: Record "Item Substitution" temporary);
+    var
+        SaveVariantGrpCode: Code[10];
+        SaveVarintGrpType: Option " ",Flat,Round,Ring;
+        SaveLength: Decimal;
+        SaveWidth: Decimal;
+        SaveThickness: Decimal;
+        SaveInnerDia: Decimal;
+        SaveOuterDia: Decimal;
+        SaveNoOfPcs: Decimal;
+        SaveNoOfPcsToShp: Decimal;
+        SaveRatePerPc: Decimal;
+        SaveOriginalQty: Decimal;
+        SaveUnitPrice: Decimal;
+        SaveLineDiscPC: Decimal;
+        grecGeneralLedgerSetup: Record 98;
+        gcduGSCProcess: Codeunit 50002;
+        SaveDes2: Text[50];
+    begin
+        //CR-045  -Start
+        SaveVariantGrpCode := SourceSalesLine."Variant Group Code";
+        SaveVarintGrpType := SourceSalesLine."Variant Group Type";
+        SaveLength := SourceSalesLine.Length;
+        SaveWidth := SourceSalesLine.Width;
+        SaveThickness := SourceSalesLine.Thickness;
+        SaveInnerDia := SourceSalesLine."Inner Diameter";
+        SaveOuterDia := SourceSalesLine."Outer Diameter";
+        SaveNoOfPcs := SourceSalesLine."No. of Pieces";
+        SaveNoOfPcsToShp := SourceSalesLine."No. of Pieces to Ship";
+        SaveRatePerPc := SourceSalesLine."Rate per Piece";
+        SaveOriginalQty := SourceSalesLine."Original Quantity";
+        SaveUnitPrice := SourceSalesLine."Unit Price";
+        SaveLineDiscPC := SourceSalesLine."Line Discount %";
+        SaveDes2 := SourceSalesLine."Description 2";
+        //CR-045  -End 
+
+        //CR-045  -Start
+        SalesLine."Originally Ordered No." := SourceSalesLine."No."; //SaveItemNo
+        SalesLine."Originally Ordered Var. Code" := SourceSalesLine."Variant Code"; //SaveVariantCode
+        //CR-045  -End
+
+        //CR-045  -Start
+        SalesLine.VALIDATE("Variant Group Code", SaveVariantGrpCode);
+        SalesLine."Variant Group Type" := SaveVarintGrpType;
+        SalesLine.Length := SaveLength;
+        SalesLine.Width := SaveWidth;
+        SalesLine.Thickness := SaveThickness;
+        SalesLine."Inner Diameter" := SaveInnerDia;
+        SalesLine."Outer Diameter" := SaveOuterDia;
+        SalesLine.VALIDATE("Unit Price", SaveUnitPrice);
+        SalesLine.VALIDATE("No. of Pieces", SaveNoOfPcs);
+        SalesLine."Rate per Piece" := SaveRatePerPc;
+        SalesLine.VALIDATE("Line Discount %", SaveLineDiscPC);
+        SalesLine."Original Quantity" := SaveOriginalQty;
+        SalesLine."Description 2" := SaveDes2; //T16967_17thJul2020_Added
+                                               //CR-045  -End
+                                               //GOEL1.00**Upgrade**300319**KMP
+        grecGeneralLedgerSetup.GET;
+        IF SourceSalesLine."Shortcut Dimension 1 Code" <> '' THEN BEGIN
+            SalesLine."Shortcut Dimension 1 Code" := SourceSalesLine."Shortcut Dimension 1 Code";
+            SalesLine."Dimension Set ID" := gcduGSCProcess.fctGetNewDimSetID(SalesLine."Dimension Set ID", grecGeneralLedgerSetup."Global Dimension 1 Code", SourceSalesLine."Shortcut Dimension 1 Code");
+        END;
+        IF SourceSalesLine."Shortcut Dimension 2 Code" <> '' THEN BEGIN
+            SalesLine."Shortcut Dimension 2 Code" := SourceSalesLine."Shortcut Dimension 2 Code";
+            SalesLine."Dimension Set ID" := gcduGSCProcess.fctGetNewDimSetID(SalesLine."Dimension Set ID", grecGeneralLedgerSetup."Global Dimension 2 Code", SourceSalesLine."Shortcut Dimension 2 Code");
+        END;
+        //GOEL1.00**Upgrade**300319**KMP
+
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"TransferOrder-Post Shipment", OnBeforeInsertTransShptHeader, '', false, false)]
+    local procedure OnBeforeInsertTransShptHeader(var TransShptHeader: Record "Transfer Shipment Header"; TransHeader: Record "Transfer Header"; CommitIsSuppressed: Boolean);
+    begin
+        //>>GSC-018
+        TransShptHeader."Sales Order No." := TransHeader."Sales Order No.";
+        TransShptHeader."Ship-to Name" := TransHeader."Ship-to Name";
+        TransShptHeader."Ship-to Name 2" := TransHeader."Ship-to Name 2";
+        TransShptHeader."Ship-to Address" := TransHeader."Ship-to Address";
+        TransShptHeader."Ship-to Address 2" := TransHeader."Ship-to Address 2";
+        TransShptHeader."Ship-to City" := TransHeader."Ship-to City";
+        TransShptHeader."Ship-to Contact" := TransHeader."Ship-to Contact";
+        TransShptHeader."Ship-to Post Code" := TransHeader."Ship-to Post Code";
+        TransShptHeader."Ship-to County" := TransHeader."Ship-to County";
+        TransShptHeader."Ship-to Country/Region Code" := TransHeader."Ship-to Country/Region Code";
+        TransShptHeader."Promised Delivery Date" := TransHeader."Promised Delivery Date";
+        TransShptHeader."Sell-to Customer No." := TransHeader."Sell-to Customer No.";
+        TransShptHeader."Ship-to Code" := TransHeader."Ship-to Code";
+        //<<GSC-018
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"TransferOrder-Post Shipment", OnBeforeInsertTransShptLine, '', false, false)]
+    local procedure OnBeforeInsertTransShptLine(var TransShptLine: Record "Transfer Shipment Line"; TransLine: Record "Transfer Line"; CommitIsSuppressed: Boolean; var IsHandled: Boolean; TransShptHeader: Record "Transfer Shipment Header");
+    begin
+        //>>GSC-017
+        TransShptLine."Variant Group Code" := TransLine."Variant Group Code";
+        TransShptLine."Variant Group Type" := TransLine."Variant Group Type";
+        TransShptLine.Thickness := TransLine.Thickness;
+        TransShptLine.Width := TransLine.Width;
+        TransShptLine."Inner Diameter" := TransLine."Inner Diameter";
+        TransShptLine.Length := TransLine.Length;
+        TransShptLine."No. of Pieces" := TransLine."No. of Pieces to Ship";
+        TransShptLine."Outer Diameter" := TransLine."Outer Diameter";
+        //>>GSC-017
+        //TDK>>>>
+        TransShptLine."Prod. Order No." := TransLine."Prod. Order No.";
+        TransShptLine."Prod. Order Line No." := TransLine."Prod. Order Line No.";
+        TransShptLine."Updated From Production" := TransLine."Updated From Production";
+        //TDK<<<<        
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"TransferOrder-Post Shipment", OnBeforeUpdateWithWarehouseShipReceive, '', false, false)]
+    local procedure OnBeforeUpdateWithWarehouseShipReceive(var TransferLine: Record "Transfer Line");
+    begin
+        //>>GSC-017
+        TransferLine."No. of Pieces Shipped" := TransferLine."No. of Pieces Shipped" + TransferLine."No. of Pieces to Ship";
+        TransferLine."No. of Pieces to Ship" := TransferLine."No. of Pieces" - TransferLine."No. of Pieces Shipped";
+        //<<GSC-017        
+    end;
+
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"TransferOrder-Post Receipt", OnBeforeTransRcptHeaderInsert, '', false, false)]
+    local procedure OnBeforeTransRcptHeaderInsert(var TransferReceiptHeader: Record "Transfer Receipt Header"; TransferHeader: Record "Transfer Header");
+    begin
+        //>>GSC-018
+        TransferReceiptHeader."Sales Order No." := TransferHeader."Sales Order No.";
+        TransferReceiptHeader."Ship-to Name" := TransferHeader."Ship-to Name";
+        TransferReceiptHeader."Ship-to Name 2" := TransferHeader."Ship-to Name 2";
+        TransferReceiptHeader."Ship-to Address" := TransferHeader."Ship-to Address";
+        TransferReceiptHeader."Ship-to Address 2" := TransferHeader."Ship-to Address 2";
+        TransferReceiptHeader."Ship-to City" := TransferHeader."Ship-to City";
+        TransferReceiptHeader."Ship-to Contact" := TransferHeader."Ship-to Contact";
+        TransferReceiptHeader."Ship-to Post Code" := TransferHeader."Ship-to Post Code";
+        TransferReceiptHeader."Ship-to County" := TransferHeader."Ship-to County";
+        TransferReceiptHeader."Ship-to Country/Region Code" := TransferHeader."Ship-to Country/Region Code";
+        TransferReceiptHeader."Promised Delivery Date" := TransferHeader."Promised Delivery Date";
+        TransferReceiptHeader."Sell-to Customer No." := TransferHeader."Sell-to Customer No.";
+        TransferReceiptHeader."Ship-to Code" := TransferHeader."Ship-to Code";
+        //<<GSC-018        
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"TransferOrder-Post Receipt", OnBeforeInsertTransRcptLine, '', false, false)]
+    local procedure OnBeforeInsertTransRcptLine(var TransRcptLine: Record "Transfer Receipt Line"; TransLine: Record "Transfer Line"; CommitIsSuppressed: Boolean; var IsHandled: Boolean; TransferReceiptHeader: Record "Transfer Receipt Header");
+    begin
+        //>>GSC-017
+        TransRcptLine."Variant Group Code" := TransLine."Variant Group Code";
+        TransRcptLine."Variant Group Type" := TransLine."Variant Group Type";
+        TransRcptLine.Thickness := TransLine.Thickness;
+        TransRcptLine.Width := TransLine.Width;
+        TransRcptLine."Inner Diameter" := TransLine."Inner Diameter";
+        TransRcptLine.Length := TransLine.Length;
+        TransRcptLine."No. of Pieces" := TransLine."No. of Pieces to Receive";
+        TransRcptLine."Outer Diameter" := TransLine."Outer Diameter";
+        //>>GSC-017
+        //TDK>>>>
+        TransRcptLine."Prod. Order No." := TransLine."Prod. Order No.";
+        TransRcptLine."Prod. Order Line No." := TransLine."Prod. Order Line No.";
+        TransRcptLine."Updated From Production" := TransLine."Updated From Production";
+        //TDK<<<<        
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"TransferOrder-Post Receipt", OnRunOnBeforeUpdateWithWarehouseShipReceive, '', false, false)]
+    local procedure OnRunOnBeforeUpdateWithWarehouseShipReceive(var TransferLine: Record "Transfer Line");
+    begin
+
+        //>>GSC-017
+        TransferLine."No. of Pieces Received" := TransferLine."No. of Pieces Received" + TransferLine."No. of Pieces to Receive";
+        TransferLine."No. of Pieces to Receive" := TransferLine."No. of Pieces" - TransferLine."No. of Pieces Received";
+        //<<GSC-017        
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"TransferOrder-Post Receipt", OnBeforePostItemJournalLine, '', false, false)]
+    local procedure OnBeforePostItemJournalLine(var ItemJournalLine: Record "Item Journal Line"; TransferLine: Record "Transfer Line"; TransferReceiptHeader: Record "Transfer Receipt Header"; TransferReceiptLine: Record "Transfer Receipt Line"; CommitIsSuppressed: Boolean; TransLine: Record "Transfer Line"; PostedWhseRcptHeader: Record "Posted Whse. Receipt Header");
+    begin
+        //>>GSC-017
+        ItemJournalLine."Variant Group Code" := TransLine."Variant Group Code";
+        ItemJournalLine."Variant Group Type" := TransLine."Variant Group Type";
+        ItemJournalLine.Thickness := TransLine.Thickness;
+        ItemJournalLine.Width := TransLine.Width;
+        ItemJournalLine."Inner Diameter" := TransLine."Inner Diameter";
+        ItemJournalLine.Length := TransLine.Length;
+        ItemJournalLine."Outer Diameter" := TransLine."Outer Diameter";
+        ItemJournalLine."No. of Pieces" := TransLine."No. of Pieces to Ship";
+        //<<GSC-017        
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Whse.-Post Shipment", OnCreatePostedShptLineOnBeforePostedWhseShptLineInsert, '', false, false)]
+    local procedure OnCreatePostedShptLineOnBeforePostedWhseShptLineInsert(var PostedWhseShptLine: Record "Posted Whse. Shipment Line"; WhseShptLine: Record "Warehouse Shipment Line");
+    begin
+        //>>GSC-017
+        PostedWhseShptLine."No. of Pieces" := WhseShptLine."No. of Pieces to Ship";
+        //<<GSC-017
+        //AD_Tec
+        PostedWhseShptLine."Brand/Grade" := WhseShptLine."Brand/Grade";
+        //AD_Tec        
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Whse.-Transfer Release", OnBeforeCreateWhseRequest, '', false, false)]
+    local procedure OnBeforeCreateWhseRequest(var WarehouseRequest: Record "Warehouse Request"; TransferHeader: Record "Transfer Header");
+    begin
+        //CR-019  -Start
+        WarehouseRequest."To be Handled" := TRUE;
+        //CR-019  -End
+    end;
+
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Copy Document Mgt.", OnCopySalesDocLineOnBeforeCopyThisLine, '', false, false)]
+    local procedure OnCopySalesDocLineOnBeforeCopyThisLine(ToSalesHeader: Record "Sales Header"; var ToSalesLine: Record "Sales Line"; FromSalesLine: Record "Sales Line"; FromSalesDocType: Enum "Sales Document Type From"; var RecalculateLines: Boolean; var CopyThisLine: Boolean; var LinesNotCopied: Integer; var Result: Boolean; var IsHandled: Boolean; var NextLineNo: Integer; DocLineNo: Integer; MoveNegLines: Boolean);
+    begin
+        //>>GSC-017
+        ToSalesLine.VALIDATE("No. of Pieces Shipped", 0);
+        //<<GSC-017
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Copy Document Mgt.", OnCopyPurchLineOnBeforeValidateQuantity, '', false, false)]
+    local procedure OnCopyPurchLineOnBeforeValidateQuantity(var ToPurchLine: Record "Purchase Line"; RecalculateLines: Boolean; FromPurchaseLine: Record "Purchase Line"; MoveNegLines: Boolean);
+    begin
+        //>>GSC-017
+        ToPurchLine.VALIDATE("No of Piece Received", 0);
+        //<<GSC-017
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Create Prod. Order Lines", OnBeforeProdOrderLineInsert, '', false, false)]
+    local procedure OnBeforeProdOrderLineInsert(var ProdOrderLine: Record "Prod. Order Line"; var ProductionOrder: Record "Production Order"; SalesLineIsSet: Boolean; var SalesLine: Record "Sales Line");
+    begin
+        //>>CR-058
+        ProdOrderLine."No. of Pieces" := SalesLine."No. of Pieces";
+        ProdOrderLine.Thickness := SalesLine.Thickness;
+        ProdOrderLine.Width := SalesLine.Width;
+        ProdOrderLine.Length := SalesLine.Length;
+        ProdOrderLine."Inner Diameter" := SalesLine."Inner Diameter";
+        ProdOrderLine."Outer Diameter" := SalesLine."Outer Diameter";
+        ProdOrderLine."Variant Group Code" := SalesLine."Variant Group Code";
+        ProdOrderLine."Variant Group Type" := SalesLine."Variant Group Type";
+        ProdOrderLine."Customer No." := SalesLine."Sell-to Customer No.";
+        l_rec_Customer.GET(SalesLine."Sell-to Customer No.");
+        ProdOrderLine."Customer Name" := l_rec_Customer.Name;
+        ProdOrderLine."Original Order Quantity" := SalesLine.Quantity;
+        ProdOrderLine."Order Type" := ProdOrderLine."Order Type"::Sales;
+        ProdOrderLine."Order No." := SalesLine."Document No.";
+        ProdOrderLine."Order Line No." := SalesLine."Line No.";
+        //<<CR-058   
+
+        //>>CR-058
+        l_rec_SalesLine := SalesLine;
+        l_rec_SalesLine."Prod. Order No." := ProdOrderLine."Prod. Order No.";
+        l_rec_SalesLine."Prod. Order Line No." := ProdOrderLine."Line No.";
+        l_rec_SalesLine.MODIFY;
+        //<<CR-058    
+    end;
+
+
+
+    var
+        CU: Codeunit 99000787;
+        VendorPaymentReceipt: Report 50013;
+        GSManufacturing: Codeunit 50004;
+        recILE: Record 32;
+        recIAE: Record 339;
+        recILE2: Record 32;
+
+
+        SHNos: Record 50003;
+        PHNos: Record 50002;
+        l_rec_SalesLine: Record 37;
+        l_Text001: Label '%1 in Line No. %2 doesnot match with %3 in Linked %4';
+        l_dec_LineQty: Decimal;
+        InvtSetup: Record 313;
+        Itemtrack: Record 337;
+        Text50005: Label 'Item tracking Qty.to Handle(Base) %1 should match with Sales Order %2  Line No. %3  Qty.to Ship(Base) %4';
+        l_rec_Customer: Record 18;
+
+
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"VAT CaptionClass Mgmt", OnBeforeVATCaptionClassTranslate, '', false, false)]
+    local procedure OnBeforeVATCaptionClassTranslate(CaptionArea: Text; CaptionExpr: Text; Language: Integer; var Caption: Text; var IsHandled: Boolean);
+    var
+        VATCaptionType: Text;
+        VATCaptionRef: Text;
+        CommaPosition: Integer;
+        ExclVATTxt: Label 'Excl. GST';
+        InclVATTxt: Label 'Incl. GST';
+    begin
+        IsHandled := true;
+        CommaPosition := StrPos(CaptionExpr, ',');
+        if CommaPosition > 0 then begin
+            IsHandled := true;
+            VATCaptionType := CopyStr(CaptionExpr, 1, CommaPosition - 1);
+            VATCaptionRef := CopyStr(CaptionExpr, CommaPosition + 1);
+            case VATCaptionType of
+                '0':
+                    Caption := (StrSubstNo('%1 %2', VATCaptionRef, ExclVATTxt));
+                '1':
+                    Caption := (StrSubstNo('%1 %2', VATCaptionRef, InclVATTxt));
+            end;
+        end;
+
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Item Jnl.-Post Batch", OnAfterConstructPostingNumber, '', false, false)]
+    local procedure OnAfterConstructPostingNumber(var ItemJournalLine: Record "Item Journal Line");
+    begin
+        //# GSC-017 -Start
+        GSCProcess.CreateItemVariantCodeOnItemPosting(ItemJournalLine);
+        //# GSC-017 -End        
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"GST Sales Validation", OnBeforeCheckHeaderLocation, '', false, false)]
+    local procedure OnBeforeCheckHeaderLocation(SalesLine: Record "Sales Line"; var IsHandled: Boolean);
+    begin
+        IsHandled := true;
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Sales Inv. Header - Edit", OnOnRunOnBeforeTestFieldNo, '', false, false)]
+    local procedure OnOnRunOnBeforeTestFieldNo(var SalesInvoiceHeader: Record "Sales Invoice Header"; SalesInvoiceHeaderRec: Record "Sales Invoice Header");
+    begin
+        SalesInvoiceHeader."Shipment Method Code" := SalesInvoiceHeaderRec."Shipment Method Code";
+        SalesInvoiceHeader."Shipping Agent Code" := SalesInvoiceHeaderRec."Shipping Agent Code";
+        SalesInvoiceHeader."Courier No." := SalesInvoiceHeaderRec."Courier No.";
+        SalesInvoiceHeader."Courier Date" := SalesInvoiceHeaderRec."Courier Date";
+        SalesInvoiceHeader."Courier Name" := SalesInvoiceHeaderRec."Courier Name";
+        SalesInvoiceHeader."Transport Method" := SalesInvoiceHeaderRec."Transport Method";
+        SalesInvoiceHeader."POD Date" := SalesInvoiceHeaderRec."POD Date";
+        SalesInvoiceHeader."LR/RR No." := SalesInvoiceHeaderRec."LR/RR No.";
+        SalesInvoiceHeader."LR/RR Date" := SalesInvoiceHeaderRec."LR/RR Date";
+        SalesInvoiceHeader."EWay Bill No." := SalesInvoiceHeaderRec."EWay Bill No.";
+        SalesInvoiceHeader."Date of dispatch" := SalesInvoiceHeaderRec."Date of dispatch";
+        SalesInvoiceHeader.Remarks := SalesInvoiceHeaderRec.Remarks;
+        SalesInvoiceHeader."Rate Option" := SalesInvoiceHeaderRec."Rate Option";
+    end;
+
+    [EventSubscriber(ObjectType::Page, Page::"Posted Sales Inv. - Update", OnAfterRecordChanged, '', false, false)]
+    local procedure OnAfterRecordChanged(var SalesInvoiceHeader: Record "Sales Invoice Header"; xSalesInvoiceHeader: Record "Sales Invoice Header"; var IsChanged: Boolean);
+    begin
+        IsChanged :=
+        (SalesInvoiceHeader."Shipment Method Code" <> xSalesInvoiceHeader."Shipment Method Code") or
+        (SalesInvoiceHeader."Shipping Agent Code" <> xSalesInvoiceHeader."Shipping Agent Code") or
+        (SalesInvoiceHeader."Courier No." <> xSalesInvoiceHeader."Courier No.") or
+        (SalesInvoiceHeader."Courier Date" <> xSalesInvoiceHeader."Courier Date") or
+        (SalesInvoiceHeader."Courier Name" <> xSalesInvoiceHeader."Courier Name") or
+        (SalesInvoiceHeader."Transport Method" <> xSalesInvoiceHeader."Transport Method") or
+        (SalesInvoiceHeader."POD Date" <> xSalesInvoiceHeader."POD Date") or
+        (SalesInvoiceHeader."LR/RR No." <> xSalesInvoiceHeader."LR/RR No.") or
+        (SalesInvoiceHeader."LR/RR Date" <> xSalesInvoiceHeader."LR/RR Date") or
+        (SalesInvoiceHeader."EWay Bill No." <> xSalesInvoiceHeader."EWay Bill No.") or
+        (SalesInvoiceHeader."Date of dispatch" <> xSalesInvoiceHeader."Date of dispatch") or
+        (SalesInvoiceHeader.Remarks <> xSalesInvoiceHeader.Remarks) or
+        (SalesInvoiceHeader."Rate Option" <> xSalesInvoiceHeader."Rate Option");
+    end;
+
+
+    procedure ModifySIH(var SIH: Record "Sales Invoice Header")
+    begin
+        SIH.Modify();
+    end;
+
+    //RV // modified codeunit due to version upgrade - 26.0.29974.0 - Error AL0280: The event 'OnBeforeCreateShptLineFromSalesLine' is not found in the target
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Sales Warehouse Mgt.", OnBeforeCreateShptLineFromSalesLine, '', false, false)]
+    local procedure OnBeforeCreateShptLineFromSalesLine(var WarehouseShipmentLine: Record "Warehouse Shipment Line"; WarehouseShipmentHeader: Record "Warehouse Shipment Header"; SalesLine: Record "Sales Line"; SalesHeader: Record "Sales Header");
+    begin
+        //>>GSC-017
+        WarehouseShipmentLine."No. of Pieces" := SalesLine."No. of Pieces";
+        WarehouseShipmentLine."No. of Pieces to Ship" := SalesLine."No. of Pieces to Ship";
+        WarehouseShipmentLine."No. of Pieces Shipped" := SalesLine."No. of Pieces Shipped";
+        WarehouseShipmentLine."Variant Group Code" := SalesLine."Variant Group Code";
+        WarehouseShipmentLine."Variant Group Type" := SalesLine."Variant Group Type";
+        WarehouseShipmentLine.Thickness := SalesLine.Thickness;
+        WarehouseShipmentLine.Width := SalesLine.Width;
+        WarehouseShipmentLine."Inner Diameter" := SalesLine."Inner Diameter";
+        WarehouseShipmentLine.Length := SalesLine.Length;
+        WarehouseShipmentLine."Outer Diameter" := SalesLine."Outer Diameter";
+        //<<GSC-017
+
+        //AD_Tec
+        WarehouseShipmentLine."Brand/Grade" := SalesLine."Brand/Grade";
+        //AD_Tec        
+    end;
+
+    //RV // modified codeunit due to version upgrade - 26.0.29974.0 - Error AL0280: The event 'OnPurchLine2ReceiptLineOnAfterUpdateReceiptLine' is not found in the target
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Purchases Warehouse Mgt.", OnPurchLine2ReceiptLineOnAfterUpdateReceiptLine, '', false, false)]
+    local procedure OnPurchLine2ReceiptLineOnAfterUpdateReceiptLine(var WarehouseReceiptLine: Record "Warehouse Receipt Line"; var WhseReceiptHeader: Record "Warehouse Receipt Header"; PurchaseLine: Record "Purchase Line");
+    begin
+        //>>GSC-017
+        WarehouseReceiptLine."No. of Pieces" := PurchaseLine."No. of Pieces";
+        WarehouseReceiptLine."No. of Pieces to Receive" := PurchaseLine."No of Piece to Receive";
+        WarehouseReceiptLine."No. of Pieces Received" := PurchaseLine."No of Piece Received";
+        WarehouseReceiptLine."Variant Group Code" := PurchaseLine."Variant Group Code";
+        WarehouseReceiptLine."Variant Group Type" := PurchaseLine."Variant Group Type";
+        WarehouseReceiptLine.Thickness := PurchaseLine.Thickness;
+        WarehouseReceiptLine.Width := PurchaseLine.Width;
+        WarehouseReceiptLine."Inner Diameter" := PurchaseLine."Inner Diameter";
+        WarehouseReceiptLine.Length := PurchaseLine.Length;
+        WarehouseReceiptLine."Outer Diameter" := PurchaseLine."Outer Diameter";
+        //<<GSC-017        
+    end;
+
+    //RV // modified codeunit due to version upgrade - 26.0.29974.0 - Error AL0280: The event 'OnBeforeCreateShptLineFromTransLine' is not found in the target 
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Transfer Warehouse Mgt.", OnBeforeCreateShptLineFromTransLine, '', false, false)]
+    local procedure OnBeforeCreateShptLineFromTransLine(var WarehouseShipmentLine: Record "Warehouse Shipment Line"; WarehouseShipmentHeader: Record "Warehouse Shipment Header"; TransferLine: Record "Transfer Line"; TransferHeader: Record "Transfer Header");
+    begin
+        //>>GSC-017
+        WarehouseShipmentLine."No. of Pieces" := TransferLine."No. of Pieces";
+        WarehouseShipmentLine."No. of Pieces to Ship" := TransferLine."No. of Pieces to Ship";
+        WarehouseShipmentLine."No. of Pieces Shipped" := TransferLine."No. of Pieces Shipped";
+        WarehouseShipmentLine."Variant Group Code" := TransferLine."Variant Group Code";
+        WarehouseShipmentLine."Variant Group Type" := TransferLine."Variant Group Type";
+        WarehouseShipmentLine.Thickness := TransferLine.Thickness;
+        WarehouseShipmentLine.Width := TransferLine.Width;
+        WarehouseShipmentLine."Inner Diameter" := TransferLine."Inner Diameter";
+        WarehouseShipmentLine.Length := TransferLine.Length;
+        WarehouseShipmentLine."Outer Diameter" := TransferLine."Outer Diameter";
+        //<<GSC-017        
+    end;
+
+    //RV // modified codeunit due to version upgrade - 26.0.29974.0 - Error AL0280: The event 'OnBeforeUpdateRcptLineFromTransLine' is not found in the target 
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Transfer Warehouse Mgt.", OnBeforeUpdateRcptLineFromTransLine, '', false, false)]
+    local procedure OnBeforeUpdateRcptLineFromTransLine(var WarehouseReceiptLine: Record "Warehouse Receipt Line"; TransferLine: Record "Transfer Line");
+    begin
+        //>>GSC-017
+        WarehouseReceiptLine."No. of Pieces" := TransferLine."No. of Pieces";
+        WarehouseReceiptLine."No. of Pieces to Receive" := TransferLine."No. of Pieces Received";
+        WarehouseReceiptLine."No. of Pieces Received" := TransferLine."No. of Pieces Received";
+        WarehouseReceiptLine."Variant Group Code" := TransferLine."Variant Group Code";
+        WarehouseReceiptLine."Variant Group Type" := TransferLine."Variant Group Type";
+        WarehouseReceiptLine.Thickness := TransferLine.Thickness;
+        WarehouseReceiptLine.Width := TransferLine.Width;
+        WarehouseReceiptLine."Inner Diameter" := TransferLine."Inner Diameter";
+        WarehouseReceiptLine.Length := TransferLine.Length;
+        WarehouseReceiptLine."Outer Diameter" := TransferLine."Outer Diameter";
+        //<<GSC-017        
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Line", OnBeforeUpdateUnitPrice, '', false, false)]
+    local procedure OnBeforeUpdateUnitPrice(var SalesLine: Record "Sales Line"; xSalesLine: Record "Sales Line"; CalledByFieldNo: Integer; CurrFieldNo: Integer; var Handled: Boolean);
+    begin
+        if CalledByFieldNo = 5402 then
+            if SalesLine."Retain Sales Price" then
+                Handled := true;
+
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Item Reference Management", OnBeforeEnterSalesItemReference, '', false, false)]
+    local procedure OnBeforeEnterSalesItemReference(var SalesLine: Record "Sales Line"; var ItemReference: Record "Item Reference"; var Found: Boolean; var IsHandled: Boolean);
+    begin
+        if SalesLine."Retain Sales Price" then
+            IsHandled := true;
+    end;
+
+
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Gen. Jnl.-Post Line", OnBeforeCode, '', false, false)]
+    local procedure "Gen. Jnl.-Post Line_OnBeforeCode"(var Sender: Codeunit "Gen. Jnl.-Post Line"; var GenJnlLine: Record "Gen. Journal Line"; CheckLine: Boolean; var IsPosted: Boolean; var GLReg: Record "G/L Register"; var GLEntryNo: Integer)
+    begin
+        if (ProductionPostingSIC.GetProductionPosting()) AND (ProductionPostingSIC.GetProductionPostingDocNo() <> GenJnlLine."Document No.") then
+            Error('Please wait, Production Order posting is in Progress.');
+    end;
+
+
+
+    var
+        ProductionPostingSIC: Codeunit "Production Posting SIC";
+
+
+}
