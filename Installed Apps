@@ -1,0 +1,77 @@
+page 50002 "Installed Apps"
+{
+    ApplicationArea = All;
+    Caption = 'Installed Apps';
+    PageType = List;
+    SourceTable = "NAV App Installed App";
+    UsageCategory = Lists;
+    Editable = false;
+    InsertAllowed = false;
+    layout
+    {
+        area(Content)
+        {
+            repeater(General)
+            {
+                field(Name; Rec.Name)
+                {
+                    ToolTip = 'Specifies the name of the extension.';
+                }
+                field(Publisher; Rec.Publisher)
+                {
+                    ToolTip = 'Specifies the value of the Publisher field.', Comment = '%';
+                }
+                field(Version; VersionNo)
+                {
+                    ToolTip = 'Specifies the value of the Version field.', Comment = '%';
+                }
+                field("Published As"; Rec."Published As")
+                {
+                    ToolTip = 'Specifies the value of the Published As field.', Comment = '%';
+                }
+            }
+        }
+    }
+    actions
+    {
+        area(Processing)
+        {
+            action(ShowDependencies)
+            {
+                ApplicationArea = All;
+                Caption = 'Show Dependencies';
+                Promoted = true;
+                PromotedCategory = Process;
+                Image = ShowChart;
+                trigger OnAction()
+                var
+                    InstalledApp: Record "NAV App Installed App";
+                    Info: ModuleInfo;
+                    ModuleDependencyInfo: ModuleDependencyInfo;
+                    AllDependencies: Text;
+                begin
+                    InstalledApp.Reset();
+                    CurrPage.SetSelectionFilter(InstalledApp);
+                    if InstalledApp.FindFirst() then begin
+                        AllDependencies := '';
+                        NavApp.GetModuleInfo(Rec."App ID", Info);
+                        foreach ModuleDependencyInfo in Info.Dependencies do
+                            if ModuleDependencyInfo.Name <> 'Application' then
+                                AllDependencies := AllDependencies + ModuleDependencyInfo.Name + '\';
+                    end;
+                    if AllDependencies <> '' then
+                        Message(AllDependencies)
+                    else
+                        Message('No dependencies found');
+                end;
+            }
+        }
+    }
+    var
+        VersionNo: Text[30];
+
+    trigger OnAfterGetRecord()
+    begin
+        VersionNo := Format(Rec."Version Major") + '.' + Format(Rec."Version Minor") + '.' + Format(Rec."Version Build") + '.' + Format(Rec."Version Revision");
+    end;
+}
