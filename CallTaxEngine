@@ -1,7 +1,0 @@
-  local procedure CallTaxEngine() //Check
-    var
-        CalculateTax: Codeunit "Calculate Tax";
-    begin
-        CurrPage.SaveRecord();
-        CalculateTax.CallTaxEngineOnGenJnlLine(Rec, xRec);
-    end;
