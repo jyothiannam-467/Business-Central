@@ -1,0 +1,41 @@
+ [EventSubscriber(ObjectType::Codeunit, Codeunit::"Purch.-Post (Yes/No)", 'OnBeforeSelectPostOrderOption', '', false, false)]
+    local procedure OnBeforeSelectPostOrderOption(var PurchaseHeader: Record "Purchase Header"; DefaultOption: Integer; var Result: Boolean; var IsHandled: Boolean)
+    begin
+        IsHandled := true;
+
+        Result := ConfirmPostPurchaseDocument(PurchaseHeader, DefaultOption, false, false);
+    end;
+
+    procedure ConfirmPostPurchaseDocument(var PurchaseHeaderToPost: Record "Purchase Header"; DefaultOption: Integer; WithPrint: Boolean; WithEmail: Boolean) Result: Boolean
+    var
+        PurchaseHeader: Record "Purchase Header";
+        UserSetupManagement: Codeunit "User Setup Management";
+        ConfirmManagement: Codeunit "Confirm Management";
+        ReceiveInvoiceOptionsQst: Label '&Receive';
+        Selection: Integer;
+        IsHandled: Boolean;
+    begin
+        /*   if DefaultOption > 3 then
+              DefaultOption := 3;
+          if DefaultOption <= 0 then */
+        DefaultOption := 1;
+
+        PurchaseHeader.Copy(PurchaseHeaderToPost);
+
+        case PurchaseHeader."Document Type" of
+            PurchaseHeader."Document Type"::Order:
+                begin
+                    UserSetupManagement.GetPurchaseInvoicePostingPolicy(PurchaseHeader.Receive, PurchaseHeader.Invoice);
+
+                    Selection := StrMenu(ReceiveInvoiceOptionsQst, DefaultOption);
+                    if Selection = 0 then
+                        exit(false);
+                    PurchaseHeader.Receive := Selection in [1, 1];
+                    PurchaseHeader.Invoice := false;
+
+                end;
+        end;
+
+        PurchaseHeaderToPost.Copy(PurchaseHeader);
+        exit(true);
+    End;
