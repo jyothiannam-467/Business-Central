@@ -1,0 +1,155 @@
+About the size of the value displayed on the card/document page (textbox too small to read?)
+______________________________________________________________________________________________
+1.Using MultiLine Property
+2.Using Rich Text feature
+3.Using FactBox
+4.Show all content with one action
+
+Using MultiLine Property
+_________________________
+pageextension 50119 CustomerCardExt extends "Customer Card"
+{
+    layout
+    {
+        addafter("No.")
+        {
+            group(ZYNameGroup)
+            {
+                Caption = 'Name';
+                field(ZYName; Rec.Name)
+                {
+                    ApplicationArea = All;
+                    Caption = 'Name';
+                    MultiLine = true;
+                    ShowCaption = false;
+                    ToolTip = 'Specifies the name of the customer.';
+                }
+            }
+        }
+    }
+}
+
+Using Rich Text feature
+________________________
+tableextension 50112 CustomerExt extends Customer
+{
+    fields
+    {
+        field(50100; RichText; Blob)
+        {
+            Caption = 'Rich Text';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+pageextension 50101 CustomerCardExt extends "Customer Card"
+{
+    layout
+    {
+        addafter(General)
+        {
+            group(RichTextGroup)
+            {
+                Caption = 'Rich Text Group';
+                field(RichText; RichTextVar)
+                {
+                    Caption = 'Rich Text';
+                    MultiLine = true;
+                    ExtendedDatatype = RichContent;
+                    ApplicationArea = All;
+                    ShowCaption = false;
+                    trigger OnValidate()
+                    begin
+                        SetRichText();
+                    end;
+                }
+            }
+        }
+    }
+    var
+        RichTextVar: Text;
+    trigger OnAfterGetRecord()
+    begin
+        GetRichText();
+    end;
+    local procedure GetRichText()
+    var
+        RichTextInS: InStream;
+    begin
+        Rec.CalcFields(RichText);
+        Rec.RichText.CreateInStream(RichTextInS, TextEncoding::UTF8);
+        RichTextInS.Read(RichTextVar);
+    end;
+    local procedure SetRichText()
+    var
+        RichTextOutS: OutStream;
+    begin
+        Rec.RichText.CreateOutStream(RichTextOutS, TextEncoding::UTF8);
+        RichTextOutS.Write(RichTextVar);
+        Rec.Modify(true);
+    end;
+}
+
+Using FactBox
+_______________
+pageextension 50122 SalesOrderListExt extends "Sales Order"
+{
+    layout
+    {
+        addbefore(Control1902018507)
+        {
+            part(salesOrderWorkDescription; "Sales Order Work Description")
+            {
+                ApplicationArea = All;
+                SubPageLink = "No." = field("No."),
+                              "Document Type" = field("Document Type");
+            }
+        }
+    }
+}
+page 50122 "Sales Order Work Description"
+{
+    Caption = 'Work Description';
+    DeleteAllowed = false;
+    InsertAllowed = false;
+    LinksAllowed = false;
+    PageType = CardPart;
+    SourceTable = "Sales Header";
+    layout
+    {
+        area(content)
+        {
+            field(WorkDescription; WorkDescription)
+            {
+                ApplicationArea = All;
+                Importance = Additional;
+                MultiLine = true;
+                ShowCaption = false;
+            }
+        }
+    }
+    var
+        WorkDescription: Text;
+    trigger OnAfterGetRecord()
+    begin
+        WorkDescription := '';
+        if Rec."Work Description".HasValue then
+            WorkDescription := Rec.GetWorkDescription();
+    end;
+}
+
+Show all content with one action
+__________________________________
+pageextension 50112 MyExtension extends "Sales Order"
+{
+    layout
+    {
+        modify(WorkDescription)
+        {
+            trigger OnAssistEdit()
+            begin
+                Message(Rec.GetWorkDescription());
+            end;
+        }
+    }
+}
