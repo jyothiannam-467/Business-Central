@@ -1,0 +1,10 @@
+        {
+            "name": "snapshotInitialize: Microsoft production cloud",
+            "type": "al",
+            "request": "snapshotInitialize",
+            "environmentType": "Sandbox",
+            "environmentName": "VIZ_Production",
+            "breakOnNext": "WebClient",
+            "executionContext": "DebugAndProfile",
+            "tenant": "ad09e95e-4d7c-4b02-98e5-040b749d71f2"
+        }
